@@ -1,4 +1,5 @@
 import matplotlib
+import matplotlib.pyplot as plt
 import scipy.io
 import tkinter as tk
 from tkinter import messagebox
@@ -15,10 +16,10 @@ class ProcessaImagem:
         self.canvas_img = None
         self.start_x = None
         self.start_y = None
-        self.roi_count = 0
+        self.contagem_roi = 0
         self.current_image_index = 0
         self.images = None
-        self.patient_number = None
+        self.numero_paciente = None
         self.rect = None
 
         self.setup_menu()
@@ -33,10 +34,10 @@ class ProcessaImagem:
         self.entry_n = tk.Entry(frame)
         self.entry_n.pack(side=tk.LEFT, padx=5)
 
-        btn_load = tk.Button(frame, text="OK", command=self.initial_menu)
+        btn_load = tk.Button(frame, text="Carregar imagem", command=self.initial_menu)
         btn_load.pack(side=tk.LEFT, padx=5)
 
-        self.canvas_img = tk.Canvas(self.root, width=800, height=800)
+        self.canvas_img = tk.Canvas(self.root)
         self.canvas_img.pack(pady=20)
 
         self.canvas_img.bind("<ButtonPress-1>", self.selecionar_roi)
@@ -44,7 +45,7 @@ class ProcessaImagem:
 
     def initial_menu(self):
         try:
-            self.patient_number = int(self.entry_n.get())
+            self.numero_paciente = int(self.entry_n.get())
             
             # Altere o path para o path do arquivo dataset_liver_bmodes_steatosis_assessment_IJCARS.mat no seu computador
             path_input_dir = Path('/home/andrelinux/cc6/pai/trab-pai/data')
@@ -54,16 +55,16 @@ class ProcessaImagem:
             data_array = data['data']
             self.images = data_array['images']
             
-            self.mostrar_imagem(self.images[0][self.patient_number][self.current_image_index])
+            self.mostrar_imagem(self.images[0][self.numero_paciente][self.current_image_index])
             self.atualizar_roi_label()
         except Exception as e:
             messagebox.showerror("Erro", str(e))
 
     def mostrar_imagem(self, image):
         self.img = Image.fromarray(image)
-        self.img = self.img.resize((600, 600), Image.Resampling.LANCZOS)
         img_tk = ImageTk.PhotoImage(self.img)
         
+        self.canvas_img.config(width=self.img.width, height=self.img.height)
         self.canvas_img.create_image(0, 0, anchor=tk.NW, image=img_tk)
         self.canvas_img.image = img_tk
 
@@ -78,24 +79,25 @@ class ProcessaImagem:
         roi = self.img.crop((x1, y1, x1 + 28, y1 + 28))
         roi = roi.resize((28, 28), Image.Resampling.LANCZOS)
         
-        patient_dir = f"../images/PATIENT_{self.patient_number}"
+        patient_dir = f"../images/PATIENT_{self.numero_paciente}"
         if not os.path.exists(patient_dir):
             os.makedirs(patient_dir)
         
-        save_path = os.path.join(patient_dir, f"PAT_{self.patient_number}_IMG{self.current_image_index + 1}_ROI{self.roi_count + 1}.png")
-        roi.save(save_path)
-        self.roi_count += 1
-        if self.roi_count == 1:
-            messagebox.showinfo("Sucesso", f"ROI do fígado disponível em: {save_path}")
-        if self.roi_count == 2:
-            messagebox.showinfo("Sucesso", f"ROI do rim disponível em: {save_path}")
+        self.contagem_roi += 1
+        if self.contagem_roi == 1:
+            roi.save(os.path.join(patient_dir, f"ROI_{self.numero_paciente}_{self.current_image_index + 1}.png"))
+            messagebox.showinfo("Sucesso", f"ROI do fígado selecionado")
+        if self.contagem_roi == 2:
+            messagebox.showinfo("Sucesso", f"ROI do rim selecionado")
 
-        if self.roi_count == 2:
-            self.roi_count = 0
+        self.gerar_histograma(roi, patient_dir, self.contagem_roi, self.numero_paciente, self.current_image_index + 1)
+
+        if self.contagem_roi == 2:
+            self.contagem_roi = 0
             self.current_image_index += 1
-            if self.current_image_index < len(self.images[0][self.patient_number]):
+            if self.current_image_index < len(self.images[0][self.numero_paciente]):
                 self.canvas_img.delete("all")
-                self.mostrar_imagem(self.images[0][self.patient_number][self.current_image_index])
+                self.mostrar_imagem(self.images[0][self.numero_paciente][self.current_image_index])
             else:
                 messagebox.showinfo("Info", "Não há mais imagens disponíveis para este paciente.")
 
@@ -107,15 +109,30 @@ class ProcessaImagem:
 
         if self.rect:
             self.canvas_img.delete(self.rect)
-        self.rect = self.canvas_img.create_rectangle(x1, y1, x2, y2, outline="red", width=2)
+        self.rect = self.canvas_img.create_rectangle(x1, y1, x2, y2, outline="green", width=2)
 
     def atualizar_roi_label(self):
-        roi_label = f"ROI {self.roi_count + 1}"
+        roi_label = f"ROI {self.contagem_roi + 1}"
         self.root.title(f"Visualizador de Imagens - {roi_label}")
 
+    def gerar_histograma(self, roi, patient_dir, contagem_roi, numero_paciente, index_imagem):
+        roi_gray = roi.convert("L")
+        
+        histogram = roi_gray.histogram()
+        
+        plt.figure()
+        plt.bar(range(256), histogram, width=1, color='black')
+        plt.title(f"Histograma referente ao ROI{contagem_roi}_{numero_paciente}_{index_imagem}")
+        plt.xlabel("Tom de cinza")
+        plt.ylabel("Frequência")
+        
+        histogram_path = os.path.join(patient_dir, f"Histograma_{numero_paciente}_{index_imagem}.png")
+        plt.savefig(histogram_path)
+        plt.close()
+
 root = tk.Tk()
-root.title("Menu")
-root.geometry("850x850")
+root.title("Visualizador de Imagens")
+root.geometry("800x800")
 
 app = ProcessaImagem(root)
 
