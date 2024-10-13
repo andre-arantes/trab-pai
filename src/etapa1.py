@@ -1,3 +1,5 @@
+import csv
+import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 import scipy.io
@@ -17,7 +19,7 @@ class ProcessaImagem:
         self.start_x = None
         self.start_y = None
         self.contagem_roi = 0
-        self.current_image_index = 0
+        self.index_img = 0
         self.images = None
         self.numero_paciente = None
         self.rect = None
@@ -55,8 +57,8 @@ class ProcessaImagem:
             data_array = data['data']
             self.images = data_array['images']
             
-            self.mostrar_imagem(self.images[0][self.numero_paciente][self.current_image_index])
-            self.atualizar_roi_label()
+            self.mostrar_imagem(self.images[0][self.numero_paciente][self.index_img])
+            self.atualizar_label_roi()
         except Exception as e:
             messagebox.showerror("Erro", str(e))
 
@@ -70,12 +72,12 @@ class ProcessaImagem:
 
     def selecionar_roi(self, event):
         self.start_x, self.start_y = event.x, event.y
-        end_x, end_y = event.x, event.y
-        self.salvar_roi(self.start_x, self.start_y, end_x, end_y)
+        print(f"start_x: {self.start_x}, start_y: {self.start_y}")
+        self.salvar_roi(self.start_x, self.start_y)
         self.desenhar_retangulo(self.start_x, self.start_y)
-        self.atualizar_roi_label()
+        self.atualizar_label_roi()
 
-    def salvar_roi(self, x1, y1, x2, y2):
+    def salvar_roi(self, x1, y1):
         roi = self.img.crop((x1, y1, x1 + 28, y1 + 28))
         roi = roi.resize((28, 28), Image.Resampling.LANCZOS)
         
@@ -85,19 +87,23 @@ class ProcessaImagem:
         
         self.contagem_roi += 1
         if self.contagem_roi == 1:
-            roi.save(os.path.join(patient_dir, f"ROI_{self.numero_paciente}_{self.current_image_index + 1}.png"))
+            nome_arquivo = f"ROI_{self.numero_paciente}_{self.index_img + 1}.png"
+            roi.save(os.path.join(patient_dir, nome_arquivo))
             messagebox.showinfo("Sucesso", f"ROI do fígado selecionado")
+            self.gerar_histograma(roi, patient_dir, self.contagem_roi, self.numero_paciente, self.index_img + 1, False)
         if self.contagem_roi == 2:
+            nome_arquivo = f"ROI_{self.numero_paciente}_{self.index_img + 1}.png"
+            roi.save(os.path.join(patient_dir, nome_arquivo))
             messagebox.showinfo("Sucesso", f"ROI do rim selecionado")
+            self.gerar_histograma(roi, patient_dir, self.contagem_roi, self.numero_paciente, self.index_img + 1, True)
 
-        self.gerar_histograma(roi, patient_dir, self.contagem_roi, self.numero_paciente, self.current_image_index + 1)
 
         if self.contagem_roi == 2:
             self.contagem_roi = 0
-            self.current_image_index += 1
-            if self.current_image_index < len(self.images[0][self.numero_paciente]):
+            self.index_img += 1
+            if self.index_img < len(self.images[0][self.numero_paciente]):
                 self.canvas_img.delete("all")
-                self.mostrar_imagem(self.images[0][self.numero_paciente][self.current_image_index])
+                self.mostrar_imagem(self.images[0][self.numero_paciente][self.index_img])
             else:
                 messagebox.showinfo("Info", "Não há mais imagens disponíveis para este paciente.")
 
@@ -111,24 +117,60 @@ class ProcessaImagem:
             self.canvas_img.delete(self.rect)
         self.rect = self.canvas_img.create_rectangle(x1, y1, x2, y2, outline="green", width=2)
 
-    def atualizar_roi_label(self):
+    def atualizar_label_roi(self):
         roi_label = f"ROI {self.contagem_roi + 1}"
         self.root.title(f"Visualizador de Imagens - {roi_label}")
 
-    def gerar_histograma(self, roi, patient_dir, contagem_roi, numero_paciente, index_imagem):
+    def gerar_histograma(self, roi, patient_dir, contagem_roi, numero_paciente, index_imagem, is_rim):
+        # MUDAR DESSE LUGAR, APENAS TESTE
+        # novo_dado = pd.DataFrame({'nome do arquivo': [nome_do_arquivo], 'total': [total]})
+
         roi_gray = roi.convert("L")
         
-        histogram = roi_gray.histogram()
+        histograma = roi_gray.histogram()
+
+        total_pixels = sum(histograma)
+        soma_tons_cinza = sum(valor * contagem for valor, contagem in enumerate(histograma))
+        media_tons_cinza = soma_tons_cinza / total_pixels
+
         
         plt.figure()
-        plt.bar(range(256), histogram, width=1, color='black')
+        plt.bar(range(256), histograma, width=1, color='black')
         plt.title(f"Histograma referente ao ROI{contagem_roi}_{numero_paciente}_{index_imagem}")
-        plt.xlabel("Tom de cinza")
-        plt.ylabel("Frequência")
-        
-        histogram_path = os.path.join(patient_dir, f"Histograma_{numero_paciente}_{index_imagem}.png")
-        plt.savefig(histogram_path)
-        plt.close()
+        plt.xlabel("Brightness")
+        plt.ylabel("Count")
+
+        x_max = plt.gca().get_xlim()[1]
+        y_max = plt.gca().get_ylim()[1]
+
+
+        plt.text(x=x_max * 0.75, y=y_max * 0.9, s=f'Média: {media_tons_cinza:.2f}', fontsize=12, color='black')
+
+
+
+        # try:
+        #     df_existente = pd.read_csv(nome_arquivo)
+
+        #     # Concatenando o novo dado ao DataFrame existente
+        #     df_atualizado = pd.concat([df_existente, novo_dado], ignore_index=True)
+        # except FileNotFoundError:
+        #     # Caso o arquivo não exista, o novo dado será o DataFrame completo
+        #     df_atualizado = novo_dado
+
+        # # Salvando o DataFrame atualizado de volta no arquivo CSV
+        # df_atualizado.to_csv(nome_arquivo, index=False)
+
+
+
+        if(is_rim):
+            histogram_path = os.path.join(patient_dir, f"RIM-Histograma_{numero_paciente}_{index_imagem}.png")
+            plt.savefig(histogram_path)
+            plt.close()
+        else:
+            histogram_path = os.path.join(patient_dir, f"Histograma_{numero_paciente}_{index_imagem}.png")
+            plt.savefig(histogram_path)
+            plt.close()
+
 
 root = tk.Tk()
 root.title("Visualizador de Imagens")
