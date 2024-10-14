@@ -58,7 +58,7 @@ class ProcessaImagem:
             self.numero_paciente = int(self.entry_n.get())
             
             # Altere o path para o path do arquivo dataset_liver_bmodes_steatosis_assessment_IJCARS.mat no seu computador
-            path_input_dir = Path('/home/andrelinux/cc6/pai/trab-pai/data')
+            path_input_dir = Path('C:/Users/uni34536/Documents/PC/trab-pai-main/data')
             path_data = path_input_dir / 'dataset_liver_bmodes_steatosis_assessment_IJCARS.mat'
 
             if not path_data.exists():
@@ -87,6 +87,7 @@ class ProcessaImagem:
         self.salvar_roi(self.start_x, self.start_y)
         self.desenhar_retangulo(self.start_x, self.start_y)
         self.atualizar_label_roi()
+        print(self.controler)
         if self.controler != 0:
             self.gerenciar_csv(self.numero_paciente, self.cord_x, self.cord_y, self.start_x, self.start_y, self.indice_HI, self.classe_paciente)
 
@@ -109,6 +110,23 @@ class ProcessaImagem:
             with open(self.nome_arquivo_csv, mode='w', newline='', encoding='utf-8') as arquivo_csv:
                 escritor = csv.writer(arquivo_csv)
                 escritor.writerow(['Nome do Arquivo', 'Roi Fígado X', 'Roi Fígado Y', 'Roi Rim X', 'Roi Rim Y', 'Índice hepatorenal (HI)', 'Classe'])  # Cabeçalho
+    
+    # ____________ALtereção Lucas_______________
+    def ajustar_roi(self, roi, HI):
+        # Converte a imagem para modo 'L' (tons de cinza)
+        roi = roi.convert("L")
+        pixels = roi.load()
+
+        # Itera sobre cada pixel e ajusta o valor multiplicando pelo HI
+        for i in range(roi.size[0]):
+            for j in range(roi.size[1]):
+                pixel_valor = pixels[i, j]
+                novo_valor = int(pixel_valor * HI)
+                # Garante que o novo valor esteja entre 0 e 255
+                pixels[i, j] = min(255, max(0, novo_valor))
+            
+        return roi
+    # ____________________________________
 
     def salvar_roi(self, x1, y1):
         roi = self.img.crop((x1, y1, x1 + 28, y1 + 28))
@@ -119,24 +137,31 @@ class ProcessaImagem:
             os.makedirs(patient_dir)
         
         self.contagem_roi += 1
-        if self.contagem_roi == 1:
-            nome_arquivo = f"ROI_{self.numero_paciente}_{self.index_img + 1}.png"
-            roi.save(os.path.join(patient_dir, nome_arquivo))
-            messagebox.showinfo("Sucesso", f"ROI do fígado selecionado")
+        if self.contagem_roi == 2:
+            # _________Alteração Lucas________
+            self.controler = 1
             self.gerar_indice_HI(roi, self.contagem_roi)
+            self.contagem_roi = 0
+            # ___________________________________
+            roi_ajustado = self.ajustar_roi(roi, self.indice_HI)
+            self.index_img += 1
+            nome_arquivo = f"ROI_{self.numero_paciente}_{self.index_img}.png"
+            roi_ajustado.save(os.path.join(patient_dir, nome_arquivo))
+            messagebox.showinfo("Sucesso", f"ROI do fígado selecionado")
             self.gerar_histograma(roi, patient_dir, self.contagem_roi, self.numero_paciente, self.index_img + 1, False)
+
+            
+
+        if self.contagem_roi == 1:
+            self.controler = 0
             self.cord_x = x1
             self.cord_y = y1
-            self.controler = 0
 
-        if self.contagem_roi == 2:
-            self.controler = 1
             nome_arquivo = f"ROI_{self.numero_paciente}_{self.index_img + 1}.png"
             roi.save(os.path.join(patient_dir, nome_arquivo))
             messagebox.showinfo("Sucesso", f"ROI do rim selecionado")
             self.gerar_indice_HI(roi, self.contagem_roi)
             self.gerar_histograma(roi, patient_dir, self.contagem_roi, self.numero_paciente, self.index_img + 1, True)
-            self.contagem_roi = 0
             self.index_img += 1
             if self.index_img < len(self.images[0][self.numero_paciente]):
                 self.canvas_img.delete("all")
