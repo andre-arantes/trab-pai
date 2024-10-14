@@ -8,6 +8,7 @@ from tkinter import messagebox
 from pathlib import Path
 from PIL import Image, ImageTk
 import os
+import numpy as np
 
 matplotlib.use('TkAgg')
 
@@ -23,7 +24,14 @@ class ProcessaImagem:
         self.images = None
         self.numero_paciente = None
         self.rect = None
-
+        self.roi_media_figado = None
+        self.indice_HI = None
+        self.dicionario = []
+        self.nome_arquivo_csv = "Dados.csv"
+        self.classe_paciente = ''
+        self.cord_x = None
+        self.cord_Y = None
+        self.controler = None
         self.setup_menu()
 
     def setup_menu(self):
@@ -41,9 +49,9 @@ class ProcessaImagem:
 
         self.canvas_img = tk.Canvas(self.root)
         self.canvas_img.pack(pady=20)
-
+        self.criar_csv()
         self.canvas_img.bind("<ButtonPress-1>", self.selecionar_roi)
-        self.canvas_img.bind("<ButtonRelease-1>", self.selecionar_roi)
+        self.canvas_img.bind("<ButtonPress-1>", self.selecionar_roi)
 
     def initial_menu(self):
         try:
@@ -53,7 +61,10 @@ class ProcessaImagem:
             path_input_dir = Path('/home/andrelinux/cc6/pai/trab-pai/data')
             path_data = path_input_dir / 'dataset_liver_bmodes_steatosis_assessment_IJCARS.mat'
 
-            data = scipy.io.loadmat(path_data)
+            if not path_data.exists():
+                raise FileNotFoundError(f"Arquivo não encontrado: {path_data}")
+
+            data = scipy.io.loadmat(str(path_data))
             data_array = data['data']
             self.images = data_array['images']
             
@@ -72,10 +83,32 @@ class ProcessaImagem:
 
     def selecionar_roi(self, event):
         self.start_x, self.start_y = event.x, event.y
-        print(f"start_x: {self.start_x}, start_y: {self.start_y}")
+        # print(f"start_x: {self.start_x}, start_y: {self.start_y}")
         self.salvar_roi(self.start_x, self.start_y)
         self.desenhar_retangulo(self.start_x, self.start_y)
         self.atualizar_label_roi()
+        if self.controler != 0:
+            self.gerenciar_csv(self.numero_paciente, self.cord_x, self.cord_y, self.start_x, self.start_y, self.indice_HI, self.classe_paciente)
+
+    def gerenciar_csv(self, numero_paciente, cord_x, cord_y, posicao_X, posicao_Y, indice_HI, classe_paciente):
+
+        if numero_paciente <= 16:
+            classe_paciente = 'Paciente Saudável'
+        else:
+            classe_paciente = 'Paciente com Esteatose'
+
+        nova_linha = {'Nome do Arquivo': f"PATIENT_{numero_paciente}", 'Roi Fígado X': cord_x, 'Roi Fígado Y': cord_y, 'Roi Rim X': posicao_X, 'Roi Rim Y': posicao_Y, 'Índice hepatorenal (HI)': indice_HI, 'Classe': classe_paciente}
+        self.dicionario.append(nova_linha)
+        
+        with open(self.nome_arquivo_csv, mode='a', newline='', encoding='utf-8') as arquivo_csv:
+            escritor = csv.writer(arquivo_csv)
+            escritor.writerow([f"PATIENT_{numero_paciente}", cord_x, cord_y, posicao_X, posicao_Y, indice_HI, classe_paciente])
+    
+    def criar_csv(self):
+        if not os.path.exists(self.nome_arquivo_csv):
+            with open(self.nome_arquivo_csv, mode='w', newline='', encoding='utf-8') as arquivo_csv:
+                escritor = csv.writer(arquivo_csv)
+                escritor.writerow(['Nome do Arquivo', 'Roi Fígado X', 'Roi Fígado Y', 'Roi Rim X', 'Roi Rim Y', 'Índice hepatorenal (HI)', 'Classe'])  # Cabeçalho
 
     def salvar_roi(self, x1, y1):
         roi = self.img.crop((x1, y1, x1 + 28, y1 + 28))
@@ -90,15 +123,19 @@ class ProcessaImagem:
             nome_arquivo = f"ROI_{self.numero_paciente}_{self.index_img + 1}.png"
             roi.save(os.path.join(patient_dir, nome_arquivo))
             messagebox.showinfo("Sucesso", f"ROI do fígado selecionado")
+            self.gerar_indice_HI(roi, self.contagem_roi)
             self.gerar_histograma(roi, patient_dir, self.contagem_roi, self.numero_paciente, self.index_img + 1, False)
+            self.cord_x = x1
+            self.cord_y = y1
+            self.controler = 0
+
         if self.contagem_roi == 2:
+            self.controler = 1
             nome_arquivo = f"ROI_{self.numero_paciente}_{self.index_img + 1}.png"
             roi.save(os.path.join(patient_dir, nome_arquivo))
             messagebox.showinfo("Sucesso", f"ROI do rim selecionado")
+            self.gerar_indice_HI(roi, self.contagem_roi)
             self.gerar_histograma(roi, patient_dir, self.contagem_roi, self.numero_paciente, self.index_img + 1, True)
-
-
-        if self.contagem_roi == 2:
             self.contagem_roi = 0
             self.index_img += 1
             if self.index_img < len(self.images[0][self.numero_paciente]):
@@ -122,9 +159,6 @@ class ProcessaImagem:
         self.root.title(f"Visualizador de Imagens - {roi_label}")
 
     def gerar_histograma(self, roi, patient_dir, contagem_roi, numero_paciente, index_imagem, is_rim):
-        # MUDAR DESSE LUGAR, APENAS TESTE
-        # novo_dado = pd.DataFrame({'nome do arquivo': [nome_do_arquivo], 'total': [total]})
-
         roi_gray = roi.convert("L")
         
         histograma = roi_gray.histogram()
@@ -146,22 +180,6 @@ class ProcessaImagem:
 
         plt.text(x=x_max * 0.75, y=y_max * 0.9, s=f'Média: {media_tons_cinza:.2f}', fontsize=12, color='black')
 
-
-
-        # try:
-        #     df_existente = pd.read_csv(nome_arquivo)
-
-        #     # Concatenando o novo dado ao DataFrame existente
-        #     df_atualizado = pd.concat([df_existente, novo_dado], ignore_index=True)
-        # except FileNotFoundError:
-        #     # Caso o arquivo não exista, o novo dado será o DataFrame completo
-        #     df_atualizado = novo_dado
-
-        # # Salvando o DataFrame atualizado de volta no arquivo CSV
-        # df_atualizado.to_csv(nome_arquivo, index=False)
-
-
-
         if(is_rim):
             histogram_path = os.path.join(patient_dir, f"RIM-Histograma_{numero_paciente}_{index_imagem}.png")
             plt.savefig(histogram_path)
@@ -170,8 +188,22 @@ class ProcessaImagem:
             histogram_path = os.path.join(patient_dir, f"Histograma_{numero_paciente}_{index_imagem}.png")
             plt.savefig(histogram_path)
             plt.close()
+    
+    def gerar_indice_HI(self, roi, contagem_roi):
+        roi_rim_media = 0
+        if contagem_roi == 1:
+            roi_figado_cinza = roi.convert("L")
+            roi_figado_array = np.array(roi_figado_cinza)
+            self.roi_figado_media = np.mean(roi_figado_array)
+        if contagem_roi == 2:
+            roi_rim_cinza = roi.convert("L")
+            roi_rim_array = np.array(roi_rim_cinza)
+            roi_rim_media = np.mean(roi_rim_array)
 
-
+        if roi_rim_media != 0:
+            self.indice_HI = roi_rim_media / self.roi_figado_media
+            messagebox.showinfo("Índice HI", f"O índice HI é: {self.indice_HI:.2f}")
+        
 root = tk.Tk()
 root.title("Visualizador de Imagens")
 root.geometry("800x800")
