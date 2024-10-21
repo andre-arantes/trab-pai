@@ -8,6 +8,7 @@ from pathlib import Path
 from PIL import Image, ImageTk
 import os
 import numpy as np
+import io
 
 matplotlib.use("TkAgg")
 
@@ -132,6 +133,7 @@ class ImageProcessor:
         self.root = root
         self.img = None
         self.canvas_img = None
+        self.canvas_hist = None
         self.roi_x = None
         self.roi_y = None
         self.roi_count = 0
@@ -147,9 +149,12 @@ class ImageProcessor:
         self.coord_y = None
         self.liver_grayscale = None
         self.kidney_grayscale = None
-        self.setup_menu()
+        self.zoom_level = 1.0
+        self.img_width = None
+        self.img_height = None
+        self.inicial_menu()
 
-    def setup_menu(self):
+    def inicial_menu(self):
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
 
@@ -159,7 +164,7 @@ class ImageProcessor:
         self.entry_n = tk.Entry(frame)
         self.entry_n.pack(side=tk.LEFT, padx=5)
 
-        btn_load = tk.Button(frame, text="Carregar imagem", command=self.initial_menu)
+        btn_load = tk.Button(frame, text="visualizar paciente", command=self.setup_menu)
         btn_load.pack(side=tk.LEFT, padx=5)
 
         self.canvas_img = tk.Canvas(self.root)
@@ -168,7 +173,130 @@ class ImageProcessor:
         self.canvas_img.bind("<ButtonPress-1>", lambda event: self.select_roi(event))
         self.canvas_img.bind("<ButtonPress-1>", lambda event: self.select_roi(event))
 
-    def initial_menu(self):
+    def visualization_menu(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        display_frame = tk.Frame(self.root)
+        display_frame.pack(pady=20)
+
+        self.canvas_img = tk.Canvas(
+            display_frame, width=400, height=400
+        )  # Adjust size based on your image
+        self.canvas_img.grid(
+            row=0, column=0, padx=10, pady=10
+        )  # Use grid for better layout control
+
+        self.canvas_hist = tk.Canvas(
+            display_frame, width=400, height=400
+        )  # Adjust size for the histogram
+        self.canvas_hist.grid(row=0, column=1, padx=10, pady=10)
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        self.update_header_roi_number()
+
+        # Create buttons for image navigation
+        btn_prev = tk.Button(frame, text="Previous Image", command=self.prev_image)
+        btn_prev.pack(side=tk.LEFT, padx=5)
+
+        btn_next = tk.Button(frame, text="Next Image", command=self.next_image)
+        btn_next.pack(side=tk.LEFT, padx=5)
+
+        self.canvas_img.bind("<MouseWheel>", self.on_mouse_wheel)
+
+        # Display the first image for the selected patient
+        self.display_image(self.images[0][self.patient_number][self.index_img])
+        self.display_histogram(self.images[0][self.patient_number][self.index_img])
+
+    def on_mouse_wheel(self, event):
+        if event.delta > 0:  # Scroll up
+            self.zoom_in()
+        else:  # Scroll down
+            self.zoom_out()
+
+    def main_menu(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        btn_img_visualization = tk.Button(
+            frame, text="Visualization menu", command=self.visualization_menu
+        )
+        btn_img_visualization.pack(side=tk.LEFT, padx=5)
+
+        btn_cut = tk.Button(frame, text="Cut Roi", command=self.cut_roi_menu)
+        btn_cut.pack(side=tk.LEFT, padx=5)
+
+        btn_visualize_roi = tk.Button(
+            frame, text="Cut Roi", command=self.visualize_roi_menu
+        )
+        btn_visualize_roi.pack(side=tk.LEFT, padx=5)
+
+        btn_compute_glcm = tk.Button(
+            frame, text="Compute GLCM", command=self.compute_glcm
+        )
+        btn_compute_glcm.pack(side=tk.LEFT, padx=5)
+
+        btn_roi_caracterization = tk.Button(
+            frame, text="Caracterize ROI", command=self.caracterize_roi
+        )
+        btn_roi_caracterization.pack(side=tk.LEFT, padx=5)
+
+        btn_classificate_img = tk.Button(
+            frame, text="Classificate image", command=self.classificate_img
+        )
+        btn_classificate_img.pack(side=tk.LEFT, padx=5)
+
+    def classificate_img(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+        label = tk.Label(frame, text="TODO")
+        label.pack(side=tk.LEFT, padx=5)
+
+    def caracterize_roi(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+        label = tk.Label(frame, text="TODO")
+        label.pack(side=tk.LEFT, padx=5)
+
+    def compute_glcm(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+        label = tk.Label(frame, text="TODO")
+        label.pack(side=tk.LEFT, padx=5)
+
+    def visualize_roi_menu(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+        label = tk.Label(frame, text="TODO")
+        label.pack(side=tk.LEFT, padx=5)
+
+    def cut_roi_menu(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+        label = tk.Label(frame, text="TODO")
+        label.pack(side=tk.LEFT, padx=5)
+
+    def setup_menu(self):
         try:
             self.patient_number = int(self.entry_n.get())
 
@@ -184,18 +312,113 @@ class ImageProcessor:
             data_array = data["data"]
             self.images = data_array["images"]
 
-            self.display_image(self.images[0][self.patient_number][self.index_img])
-            self.update_header_roi_number()
-        except Exception as e:
-            messagebox.showerror("Erro", str(e))
+            num_patients = len(self.images[0])
+            if self.patient_number >= num_patients:
+                raise IndexError(
+                    f"Patient number {self.patient_number} is out of bounds. Max patient number: {num_patients - 1}"
+                )
+
+            num_images_per_patient = len(self.images[0][self.patient_number])
+            self.index_img = 0
+
+            if self.index_img >= num_images_per_patient:
+                raise IndexError(f"Patient have no Exams!!")
+
+            self.main_menu()
+        except IndexError as e:
+            messagebox.showerror("Patient not found!!", str(e))
+        except ValueError:
+            messagebox.showerror(
+                "Invalid input. Patient number must be an integer.",
+                "Invalid input. Patient number must be an integer.",
+            )
 
     def display_image(self, image):
         self.img = Image.fromarray(image)
         img_tk = ImageTk.PhotoImage(self.img)
 
-        self.canvas_img.config(width=self.img.width, height=self.img.height)
+        # Store original dimensions for zooming
+        if self.img_width is None or self.img_height is None:
+            self.img_width, self.img_height = self.img.size
+
+        # Scale the image according to the zoom level
+        new_size = (
+            int(self.img_width * self.zoom_level),
+            int(self.img_height * self.zoom_level),
+        )
+        scaled_img = self.img.resize(new_size, Image.Resampling.LANCZOS)
+
+        img_tk = ImageTk.PhotoImage(scaled_img)
+
+        self.canvas_img.config(width=scaled_img.width, height=scaled_img.height)
         self.canvas_img.create_image(0, 0, anchor=tk.NW, image=img_tk)
         self.canvas_img.image = img_tk
+
+    def zoom_in(self):
+        self.zoom_level *= 1.2  # Increase zoom level
+        self.display_image(
+            self.images[0][self.patient_number][self.index_img]
+        )  # Redraw the image with updated zoom
+
+    def zoom_out(self):
+        self.zoom_level /= 1.2  # Decrease zoom level
+        self.display_image(self.images[0][self.patient_number][self.index_img])
+
+    def display_histogram(self, image):
+        if len(image.shape) != 2:
+            raise ValueError("Expected a 2D array for grayscale image data.")
+
+        image = Image.fromarray(image)
+        # Calculate histogram
+        histogram, bin_edges = np.histogram(image, bins=256, range=(0, 255))
+
+        # Create a matplotlib figure to display the histogram
+        fig, ax_hist = plt.subplots(figsize=(5, 4))
+
+        ax_hist.clear()
+        ax_hist.plot(bin_edges[0:-1], histogram, color="black")
+        ax_hist.set_title("Histogram")
+        ax_hist.set_xlim(0, 255)
+        ax_hist.set_ylim(0, 4000)
+        ax_hist.set_xlabel("Pixel value")
+        ax_hist.set_ylabel("Frequency")
+
+        # Save the histogram plot to a memory buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        buf.seek(0)
+
+        # Load the image from the buffer and convert it for Tkinter
+        hist_img = Image.open(buf)
+        hist_tk = ImageTk.PhotoImage(hist_img)
+
+        # Display the histogram in the Tkinter canvas
+        self.canvas_hist.config(width=hist_img.width, height=hist_img.height)
+        self.canvas_hist.create_image(0, 0, anchor=tk.NW, image=hist_tk)
+        self.canvas_hist.image = hist_tk  # Keep a reference to avoid garbage collection
+
+        buf.close()  # Close the buffer
+
+        plt.close(fig)
+
+    def prev_image(self):
+        if self.index_img > 0:
+            self.index_img -= 1
+            self.display_image(self.images[0][self.patient_number][self.index_img])
+            self.display_histogram(self.images[0][self.patient_number][self.index_img])
+            self.update_header_roi_number()
+        else:
+            messagebox.showinfo("End of Images", "This is the first image.")
+
+    def next_image(self):
+        num_images_per_patient = len(self.images[0][self.patient_number])
+        if self.index_img < num_images_per_patient - 1:
+            self.index_img += 1
+            self.display_image(self.images[0][self.patient_number][self.index_img])
+            self.display_histogram(self.images[0][self.patient_number][self.index_img])
+            self.update_header_roi_number()
+        else:
+            messagebox.showinfo("End of Images", "This is the last image.")
 
     def select_roi(self, event):
         global x_liver, y_liver, x_kidney, y_kidney
@@ -299,8 +522,8 @@ class ImageProcessor:
         return self.roi_count == 1
 
     def update_header_roi_number(self):
-        roi_label = f"ROI {self.roi_count + 1}"
-        self.root.title(f"Visualizador de Ultrassons - {roi_label}")
+        roi_label = f"ROI {self.index_img + 1}"
+        self.root.title(f"Visualizador de Imagens - {roi_label}")
 
     def create_histogram(
         self,
@@ -356,7 +579,7 @@ class ImageProcessor:
 
 root = tk.Tk()
 root.title("Visualizador de Imagens")
-root.geometry("800x800")
+root.geometry("1600x800")
 
 app = ImageProcessor(root)
 
