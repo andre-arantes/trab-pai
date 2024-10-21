@@ -1,5 +1,4 @@
 import csv
-import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 import scipy.io
@@ -10,14 +9,125 @@ from PIL import Image, ImageTk
 import os
 import numpy as np
 
-matplotlib.use('TkAgg')
+matplotlib.use("TkAgg")
+
 
 class ROI:
-    def __init__(self):
-        self.img = None,
-        self.greyscale_mean = None,
+    global media_1
+    global media_2
 
-class ProcessaImagem:
+    def __init__(self, x_liver, y_liver, x_kidney, y_kidney, width=28, height=28):
+        self.x_liver = x_liver
+        self.y_liver = y_liver
+        self.x_kidney = x_kidney
+        self.y_kidney = y_kidney
+        self.width = width
+        self.height = height
+        self.greyscale_mean = None
+
+    def calculate_grayscale_mean(self, roi_img):
+        grayscale_image = roi_img.convert("L")
+        grayscale_array = np.array(grayscale_image)
+        return np.mean(grayscale_array)
+
+    def select_roi(self, processor, x_liver, y_liver, x_kidney, y_kidney):
+        if processor.roi_count == 1:
+            processor.draw_rectangle(x_liver, y_liver)
+            messagebox.showinfo("Sucesso", "ROI do rim selecionado")
+            roi_liver_img = processor.img.crop(
+                (
+                    self.x_liver,
+                    self.y_liver,
+                    self.x_liver + self.width,
+                    self.y_liver + self.height,
+                )
+            )
+            roi_liver_img = roi_liver_img.resize(
+                (self.width, self.height), Image.Resampling.LANCZOS
+            )
+            processor.grayscale_mean = self.calculate_grayscale_mean(roi_liver_img)
+            print(processor.grayscale_mean)
+
+        if processor.roi_count == 2:
+            processor.draw_rectangle(x_liver, y_liver)
+            roi_img = processor.img.crop(
+                (self.x, self.y, self.x + self.width, self.y + self.height)
+            )
+            roi_img = roi_img.resize(
+                (self.width, self.height), Image.Resampling.LANCZOS
+            )
+            processor.grayscale_mean = self.calculate_grayscale_mean(roi_img)
+
+            print("anv", x_liver, y_liver, x_kidney, y_kidney)
+
+        processor.update_header_roi_number()
+        if processor.roi_count == 2:
+            processor.update_csv(
+                processor.patient_number,
+                processor.coord_x,
+                processor.coord_y,
+                self.x,
+                self.y,
+                processor.HI_index,
+                processor.patient_class,
+            )
+            if processor.index_img < len(processor.images[0][processor.patient_number]):
+                processor.canvas_img.delete("all")
+                processor.display_image(
+                    processor.images[0][processor.patient_number][
+                        processor.index_img + 1
+                    ]
+                )
+                processor.roi_count = 0
+            else:
+                messagebox.showinfo(
+                    "Info", "Não há mais imagens disponíveis para este paciente."
+                )
+
+    def save_roi(self, processor):
+        roi_img = processor.img.crop(
+            (self.x, self.y, self.x + self.width, self.y + self.height)
+        )
+        roi_img = roi_img.resize((self.width, self.height), Image.Resampling.LANCZOS)
+
+        processor.grayscale_mean = self.calculate_grayscale_mean(roi_img)
+
+        patient_dir = os.path.abspath(f"../images/PATIENT_{processor.patient_number}/")
+        if not os.path.exists(patient_dir):
+            os.mkdir(patient_dir)
+
+        processor.roi_count += 1
+        # if processor.is_liver_roi():
+        #     processor.liver_grayscale = self.calculate_grayscale_mean(roi_img)
+        #     media_1 = processor.liver_grayscale
+        #     print("media 1", media_1)
+        #     processor.create_histogram(
+        #         roi_img,
+        #         patient_dir,
+        #         processor.roi_count,
+        #         processor.patient_number,
+        #         processor.index_img + 1,
+        #         processor.liver_grayscale,
+        #     )
+        #     messagebox.showinfo("Sucesso", "ROI do fígado selecionado")
+        # else:
+        # processor.kidney_grayscale = self.calculate_grayscale_mean(roi_img)
+        # media_2 = processor.kidney_grayscale
+        # print("media 2", media_2)
+        # messagebox.showinfo("Sucesso", "ROI do rim selecionado")
+        # processor.create_histogram(
+        #     roi_img,
+        #     patient_dir,
+        #     processor.roi_count,
+        #     processor.patient_number,
+        #     processor.index_img + 1,
+        #     processor.kidney_grayscale,
+        # )
+
+        # processor.make_HI_index(self, media_1, media_2)
+
+
+class ImageProcessor:
     def __init__(self, root):
         self.root = root
         self.img = None
@@ -32,7 +142,7 @@ class ProcessaImagem:
         self.HI_index = None
         self.list = []
         self.nome_arquivo_csv = "Dados.csv"
-        self.patient_class = ''
+        self.patient_class = ""
         self.coord_x = None
         self.coord_y = None
         self.liver_grayscale = None
@@ -55,25 +165,25 @@ class ProcessaImagem:
         self.canvas_img = tk.Canvas(self.root)
         self.canvas_img.pack(pady=20)
         self.create_csv()
-        self.canvas_img.bind("<ButtonPress-1>", self.select_roi)
-        self.canvas_img.bind("<ButtonPress-1>", self.select_roi)
+        self.canvas_img.bind("<ButtonPress-1>", lambda event: self.select_roi(event))
+        self.canvas_img.bind("<ButtonPress-1>", lambda event: self.select_roi(event))
 
     def initial_menu(self):
         try:
             self.patient_number = int(self.entry_n.get())
-            
-            # Altere o path para o path do arquivo dataset_liver_bmodes_steatosis_assessment_IJCARS.mat no seu computador
-            # path_input_dir = Path('C:/Users/uni34536/Documents/PC/trab-pai-main/data')
-            path_input_dir = Path('/home/andrelinux/cc6/pai/trab-pai/data')
-            path_data = path_input_dir / 'dataset_liver_bmodes_steatosis_assessment_IJCARS.mat'
+
+            path_input_dir = Path("/home/andrelinux/cc6/pai/trab-pai/data")
+            path_data = (
+                path_input_dir / "dataset_liver_bmodes_steatosis_assessment_IJCARS.mat"
+            )
 
             if not path_data.exists():
                 raise FileNotFoundError(f"Arquivo não encontrado: {path_data}")
 
             data = scipy.io.loadmat(str(path_data))
-            data_array = data['data']
-            self.images = data_array['images']
-            
+            data_array = data["data"]
+            self.images = data_array["images"]
+
             self.display_image(self.images[0][self.patient_number][self.index_img])
             self.update_header_roi_number()
         except Exception as e:
@@ -82,38 +192,81 @@ class ProcessaImagem:
     def display_image(self, image):
         self.img = Image.fromarray(image)
         img_tk = ImageTk.PhotoImage(self.img)
-        
+
         self.canvas_img.config(width=self.img.width, height=self.img.height)
         self.canvas_img.create_image(0, 0, anchor=tk.NW, image=img_tk)
         self.canvas_img.image = img_tk
 
     def select_roi(self, event):
-        self.roi_x, self.roi_y = event.x, event.y
-        self.save_roi(self.roi_x, self.roi_y)
-        self.draw_rectangle(self.roi_x, self.roi_y)
-        self.update_header_roi_number()
-        if self.roi_count == 2:
-            self.gerenciar_csv(self.patient_number, self.coord_x, self.coord_y, self.roi_x, self.roi_y, self.HI_index, self.patient_class)
-
-    def gerenciar_csv(self, patient_number, coord_x, coord_y, posicao_X, posicao_Y, indice_HI, classe_paciente):
-        if patient_number <= 16:
-            classe_paciente = 'Paciente Saudável'
+        global x_liver, y_liver, x_kidney, y_kidney
+        self.roi_count += 1
+        if self.is_liver_roi():
+            x_liver, y_liver = event.x, event.y
         else:
-            classe_paciente = 'Paciente com Esteatose'
+            x_kidney, y_kidney = event.x, event.y
+            roi = ROI(x_liver, y_liver, x_kidney, y_kidney)
+            roi.select_roi(self, x_liver, y_liver, x_kidney, y_kidney)
 
-        nova_linha = {'Nome do Arquivo': f"PATIENT_{patient_number}", 'Roi Fígado X': coord_x, 'Roi Fígado Y': coord_y, 'Roi Rim X': posicao_X, 'Roi Rim Y': posicao_Y, 'Índice hepatorenal (HI)': indice_HI, 'Classe': classe_paciente}
+    def update_csv(
+        self,
+        patient_number,
+        x,
+        y,
+        posicao_X,
+        posicao_Y,
+        indice_HI,
+        classe_paciente,
+    ):
+        if patient_number <= 16:
+            classe_paciente = "Paciente Saudável"
+        else:
+            classe_paciente = "Paciente com Esteatose"
+
+        nova_linha = {
+            "Nome do Arquivo": f"PATIENT_{patient_number}",
+            "Roi Fígado X": x,
+            "Roi Fígado Y": y,
+            "Roi Rim X": posicao_X,
+            "Roi Rim Y": posicao_Y,
+            "Índice hepatorenal (HI)": indice_HI,
+            "Classe": classe_paciente,
+        }
         self.list.append(nova_linha)
-        
-        with open(self.nome_arquivo_csv, mode='a', newline='', encoding='utf-8') as arquivo_csv:
-            escritor = csv.writer(arquivo_csv)
-            escritor.writerow([f"PATIENT_{patient_number}", coord_x, coord_y, posicao_X, posicao_Y, indice_HI, classe_paciente])
-    
+
+        with open(
+            self.nome_arquivo_csv, mode="a", newline="", encoding="utf-8"
+        ) as arquivo_csv:
+            writer = csv.writer(arquivo_csv)
+            writer.writerow(
+                [
+                    f"PATIENT_{patient_number}",
+                    x,
+                    y,
+                    posicao_X,
+                    posicao_Y,
+                    indice_HI,
+                    classe_paciente,
+                ]
+            )
+
     def create_csv(self):
         if not os.path.exists(self.nome_arquivo_csv):
-            with open(self.nome_arquivo_csv, mode='w', newline='', encoding='utf-8') as arquivo_csv:
-                escritor = csv.writer(arquivo_csv)
-                escritor.writerow(['Nome do Arquivo', 'Roi Fígado X', 'Roi Fígado Y', 'Roi Rim X', 'Roi Rim Y', 'Índice hepatorenal (HI)', 'Classe'])
-    
+            with open(
+                self.nome_arquivo_csv, mode="w", newline="", encoding="utf-8"
+            ) as arquivo_csv:
+                writer = csv.writer(arquivo_csv)
+                writer.writerow(
+                    [
+                        "Nome do Arquivo",
+                        "Roi Fígado X",
+                        "Roi Fígado Y",
+                        "Roi Rim X",
+                        "Roi Rim Y",
+                        "Índice hepatorenal (HI)",
+                        "Classe",
+                    ]
+                )
+
     def adjust_liver_roi(self, roi, HI):
         if HI is None:
             raise ValueError("HI (Hepatorenal Index) is not set.")
@@ -121,47 +274,13 @@ class ProcessaImagem:
         roi = roi.convert("L")
         pixels = roi.load()
 
-        # Itera sobre cada pixel e ajusta o valor multiplicando pelo HI
         for i in range(roi.size[0]):
             for j in range(roi.size[1]):
                 pixel_valor = pixels[i, j]
                 novo_valor = int(pixel_valor * HI)
-                # Garante que o novo valor esteja entre 0 e 255
                 pixels[i, j] = min(255, max(0, novo_valor))
-            
+
         return roi
-
-    def save_roi(self, x, y):
-        roi = self.img.crop((x, y, x + 28, y + 28))
-        roi = roi.resize((28, 28), Image.Resampling.LANCZOS)
-        
-        patient_dir = f"../images/PATIENT_{self.patient_number}"
-        if not os.path.exists(patient_dir):
-            os.makedirs(patient_dir)
-        
-        self.roi_count += 1
-        if self.is_liver_roi(self):
-            self.liver_grayscale = self.calculate_grayscale_mean(self)
-            self.index_img += 1
-            nome_arquivo = f"ROI_{self.patient_number}_{self.index_img}.png"
-            roi_ajustado.save(os.path.join(patient_dir, nome_arquivo))
-            messagebox.showinfo("Sucesso", f"ROI do fígado selecionado")
-            self.create_histogram(roi, patient_dir, self.roi_count, self.patient_number, self.index_img + 1)
-
-        else:
-            self.kidney_grayscale = self.calculate_grayscale_mean(self)
-            roi_ajustado = self.adjust_liver_roi(roi, self.HI_index)
-            nome_arquivo = f"ROI_{self.patient_number}_{self.index_img + 1}.png"
-            roi.save(os.path.join(patient_dir, nome_arquivo))
-            messagebox.showinfo("Sucesso", f"ROI do rim selecionado")
-            self.make_HI_index(roi, self.roi_count)
-            self.create_histogram(roi, patient_dir, self.roi_count, self.patient_number, self.index_img + 1)
-            self.index_img += 1
-            if self.index_img < len(self.images[0][self.patient_number]):
-                self.canvas_img.delete("all")
-                self.display_image(self.images[0][self.patient_number][self.index_img])
-            else:
-                messagebox.showinfo("Info", "Não há mais imagens disponíveis para este paciente.")
 
     def draw_rectangle(self, x, y):
         x1 = x
@@ -171,72 +290,74 @@ class ProcessaImagem:
 
         if self.rect:
             self.canvas_img.delete(self.rect)
-        if self.roi_count == 1:
-            self.rect = self.canvas_img.create_rectangle(x1, y1, x2, y2, outline="green", width=2)
+        if self.is_liver_roi():
+            self.rect = self.canvas_img.create_rectangle(
+                x1, y1, x2, y2, outline="green", width=2
+            )
 
     def is_liver_roi(self):
         return self.roi_count == 1
 
     def update_header_roi_number(self):
         roi_label = f"ROI {self.roi_count + 1}"
-        self.root.title(f"Visualizador de Imagens - {roi_label}")
+        self.root.title(f"Visualizador de Ultrassons - {roi_label}")
 
-    def create_histogram(self, roi, patient_dir, roi_count, patient_number, index_image):
-        roi_gray = roi.convert("L")
+    def create_histogram(
+        self,
+        roi_image,
+        patient_dir,
+        roi_count,
+        patient_number,
+        index_image,
+        greyscale_mean,
+    ):
+        roi_gray = roi_image.convert("L")
 
         histogram = roi_gray.histogram()
 
-        pixels_sum = sum(histogram)
-        grayscale_sum = sum(value * count for value, count in enumerate(histogram))
-        greyscale_mean = grayscale_sum / pixels_sum
-
         plt.figure()
-        plt.bar(range(256), histogram, width=1, color='black')
-        plt.title(f"Histograma referente ao ROI{roi_count}_{patient_number}_{index_image}")
+        plt.bar(range(256), histogram, width=1, color="black")
+        plt.title(
+            f"Histograma referente ao ROI{roi_count}_{patient_number}_{index_image}"
+        )
         plt.xlabel("Brightness")
         plt.ylabel("Count")
 
         x_max = plt.gca().get_xlim()[1]
         y_max = plt.gca().get_ylim()[1]
 
+        plt.text(
+            x=x_max * 0.75,
+            y=y_max * 0.9,
+            s=f"Média: {greyscale_mean:.2f}",
+            fontsize=12,
+            color="black",
+        )
 
-        plt.text(x=x_max * 0.75, y=y_max * 0.9, s=f'Média: {greyscale_mean:.2f}', fontsize=12, color='black')
-
-        if(self.is_liver_roi(self)):
-            histogram_path = os.path.join(patient_dir, f"RIM-Histograma_{patient_number}_{index_image}.png")
+        if self.is_liver_roi():
+            histogram_path = os.path.join(
+                patient_dir, f"Histograma_{patient_number}_{index_image}.png"
+            )
             plt.savefig(histogram_path)
             plt.close()
         else:
-            histogram_path = os.path.join(patient_dir, f"Histograma_{patient_number}_{index_image}.png")
+            histogram_path = os.path.join(
+                patient_dir, f"RIM-Histograma_{patient_number}_{index_image}.png"
+            )
             plt.savefig(histogram_path)
             plt.close()
-    
-    def make_HI_index(self, roi):
-        if self.is_liver_roi(self):
-            liver_roi = roi.convert("L")
-            liver_roi_array = np.array(liver_roi)
-            liver_grayscale_mean = np.mean(liver_roi_array)
-        else:
-            kidney_roi = roi.convert("L")
-            kidney_roi_array = np.array(kidney_roi)
-            kidney_grayscale_mean = np.mean(kidney_roi_array)
 
-        if kidney_grayscale_mean != 0:
-            self.HI_index = kidney_grayscale_mean / liver_grayscale_mean
-            messagebox.showinfo("Índice HI", f"O índice HI é: {self.HI_index:.2f}")
-    
-    def calculate_grayscale_mean(self):            
-        image = self.img.convert("L")
-        grayscale_array = np.array(image)
-        grayscale_mean = np.mean(grayscale_array)
+    def make_HI_index(self, liver_grayscale_mean, kidney_grayscale_mean):
+        print("liver_grayscale_mean", liver_grayscale_mean)
+        print("kidney_grayscale_mean", kidney_grayscale_mean)
+        self.HI_index = liver_grayscale_mean / kidney_grayscale_mean
+        messagebox.showinfo("Índice HI", f"O índice HI é: {self.HI_index:.2f}")
 
-        return grayscale_mean
-            
 
 root = tk.Tk()
 root.title("Visualizador de Imagens")
 root.geometry("800x800")
 
-app = ProcessaImagem(root)
+app = ImageProcessor(root)
 
 root.mainloop()
