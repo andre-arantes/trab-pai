@@ -39,6 +39,9 @@ class ProcessaImagem:
         self.coord_y = None
         self.liver_grayscale = None
         self.kidney_grayscale = None
+        self.zoom_level = 1.0
+        self.img_width = None
+        self.img_height = None
         self.inicial_menu()
 
     def inicial_menu(self):
@@ -61,7 +64,7 @@ class ProcessaImagem:
         # self.canvas_img.bind("<ButtonPress-1>", self.select_roi)
 
 
-    def patient_menu(self):
+    def visualization_menu(self):
         for widget in self.root.winfo_children():
             widget.destroy()
 
@@ -86,10 +89,98 @@ class ProcessaImagem:
         btn_next = tk.Button(frame, text="Next Image", command=self.next_image)
         btn_next.pack(side=tk.LEFT, padx=5)
 
+        self.canvas_img.bind("<MouseWheel>", self.on_mouse_wheel)
+
         # Display the first image for the selected patient
         self.display_image(self.images[0][self.patient_number][self.index_img])
         self.display_histogram(self.images[0][self.patient_number][self.index_img])
 
+    def on_mouse_wheel(self, event):
+        if event.delta > 0:  # Scroll up
+            self.zoom_in()
+        else:  # Scroll down
+            self.zoom_out()
+
+
+    def main_menu(self):
+
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        btn_img_visualization = tk.Button(frame, text="Visualization menu", command=self.visualization_menu)
+        btn_img_visualization.pack(side=tk.LEFT, padx=5)
+
+        btn_cut = tk.Button(frame, text="Cut Roi", command=self.cut_roi_menu)
+        btn_cut.pack(side=tk.LEFT, padx=5)
+
+        btn_visualize_roi = tk.Button(frame, text="Cut Roi", command=self.visualize_roi_menu)
+        btn_visualize_roi.pack(side=tk.LEFT, padx=5)
+
+        btn_compute_glcm = tk.Button(frame, text="Compute GLCM", command=self.compute_glcm)
+        btn_compute_glcm.pack(side=tk.LEFT, padx=5)
+
+        btn_roi_caracterization = tk.Button(frame, text="Caracterize ROI", command=self.caracterize_roi)
+        btn_roi_caracterization.pack(side=tk.LEFT, padx=5)
+
+        btn_classificate_img = tk.Button(frame, text="Classificate image", command=self.classificate_img)
+        btn_classificate_img.pack(side=tk.LEFT, padx=5)
+
+
+    def classificate_img(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+        label = tk.Label(frame, text="TODO")
+        label.pack(side=tk.LEFT, padx=5)
+
+
+    def caracterize_roi(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+        label = tk.Label(frame, text="TODO")
+        label.pack(side=tk.LEFT, padx=5)
+
+
+    def compute_glcm(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+        label = tk.Label(frame, text="TODO")
+        label.pack(side=tk.LEFT, padx=5)
+
+
+
+    def visualize_roi_menu(self):
+
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+        label = tk.Label(frame, text="TODO")
+        label.pack(side=tk.LEFT, padx=5)
+
+    def cut_roi_menu(self):
+
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+        label = tk.Label(frame, text="TODO")
+        label.pack(side=tk.LEFT, padx=5)
+        
     def setup_menu(self):
         try:
             self.patient_number = int(self.entry_n.get())
@@ -114,7 +205,7 @@ class ProcessaImagem:
             if self.index_img >= num_images_per_patient:
                 raise IndexError(f"Patient have no Exams!!")
 
-            self.patient_menu()
+            self.main_menu()
         except IndexError as e:
             messagebox.showerror("Patient not found!!", str(e))
         except ValueError:
@@ -125,9 +216,27 @@ class ProcessaImagem:
         self.img = Image.fromarray(image)
         img_tk = ImageTk.PhotoImage(self.img)
         
-        self.canvas_img.config(width=self.img.width, height=self.img.height)
+        # Store original dimensions for zooming
+        if self.img_width is None or self.img_height is None:
+            self.img_width, self.img_height = self.img.size
+
+        # Scale the image according to the zoom level
+        new_size = (int(self.img_width * self.zoom_level), int(self.img_height * self.zoom_level))
+        scaled_img = self.img.resize(new_size, Image.Resampling.LANCZOS)
+    
+        img_tk = ImageTk.PhotoImage(scaled_img)
+        
+        self.canvas_img.config(width=scaled_img.width, height=scaled_img.height)
         self.canvas_img.create_image(0, 0, anchor=tk.NW, image=img_tk)
         self.canvas_img.image = img_tk
+
+    def zoom_in(self):
+        self.zoom_level *= 1.2  # Increase zoom level
+        self.display_image(self.images[0][self.patient_number][self.index_img])  # Redraw the image with updated zoom
+
+    def zoom_out(self):
+        self.zoom_level /= 1.2  # Decrease zoom level
+        self.display_image(self.images[0][self.patient_number][self.index_img])
 
     def display_histogram(self, image):
         if len(image.shape) != 2:
@@ -144,7 +253,7 @@ class ProcessaImagem:
         ax_hist.plot(bin_edges[0:-1], histogram, color='black')
         ax_hist.set_title("Histogram")
         ax_hist.set_xlim(0, 255)
-        ax_hist.set_ylim(0, 5000)
+        ax_hist.set_ylim(0, 4000)
         ax_hist.set_xlabel("Pixel value")
         ax_hist.set_ylabel("Frequency")
 
