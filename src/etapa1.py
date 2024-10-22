@@ -9,6 +9,7 @@ from PIL import Image, ImageTk
 import os
 import numpy as np
 import io
+import functools
 
 matplotlib.use("TkAgg")
 
@@ -36,6 +37,7 @@ class ImageProcessor:
         self.list = []
         self.nome_arquivo_csv = "Dados.csv"
         self.patient_class = ""
+        self.zoom_level = 1.0 
         self.initial_menu()
 
     def initial_menu(self):
@@ -55,7 +57,7 @@ class ImageProcessor:
         try:
             self.patient_number = int(self.entry_n.get())
 
-            path_input_dir = Path("/home/andrelinux/cc6/pai/trab-pai/data")
+            path_input_dir = Path("data")
             path_data = (
                 path_input_dir / "dataset_liver_bmodes_steatosis_assessment_IJCARS.mat"
             )
@@ -147,6 +149,18 @@ class ImageProcessor:
         self.display_image(self.images[0][self.patient_number][self.index_img])
         self.display_histogram(self.images[0][self.patient_number][self.index_img])
 
+
+        self.canvas_img.bind("<MouseWheel>", functools.partial(self.zoom, image=self.images[0][self.patient_number][self.index_img]))
+
+    def zoom(self, event, image):
+        if event.delta > 0:  # Zoom in
+            self.zoom_level *= 1.1
+        else:  # Zoom out
+            self.zoom_level *= 0.9
+
+        # display the image again with the new zoom level
+        self.display_image(image)
+
     def cut_roi_menu(self):
         for widget in self.root.winfo_children():
             widget.destroy()
@@ -188,7 +202,7 @@ class ImageProcessor:
 
         self.update_header_roi_number()
 
-        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
+        patient_dir = os.path.abspath(f"images/PATIENT_{self.patient_number}/")
         roi_files = [f for f in os.listdir(patient_dir) if f.startswith("ROI_")]
 
         if not roi_files:
@@ -211,6 +225,8 @@ class ImageProcessor:
 
         self.display_image(np.array(self.roi_images[self.index_img]))
         self.display_histogram(np.array(self.roi_images[self.index_img]))
+
+        self.canvas_img.bind("<MouseWheel>", functools.partial(self.zoom, image=np.array(self.roi_images[self.index_img])))
 
     def compute_glcm(self):
         for widget in self.root.winfo_children():
@@ -247,6 +263,9 @@ class ImageProcessor:
 
     def display_image(self, image):
         self.img = Image.fromarray(image)
+        self.img = self.img.resize((int(self.img.width * self.zoom_level), 
+                                     int(self.img.height * self.zoom_level)), 
+                                     Image.Resampling.LANCZOS) 
         img_tk = ImageTk.PhotoImage(self.img)
 
         self.canvas_img.config(width=self.img.width, height=self.img.height)
@@ -254,9 +273,8 @@ class ImageProcessor:
         self.canvas_img.image = img_tk
 
     def display_histogram(self, image):
-        if len(image.shape) != 2:
-            raise ValueError("Expected a 2D array for grayscale image data.")
-
+        print(image.shape)
+    
         image = Image.fromarray(image)
         histogram, bin_edges = np.histogram(image, bins=256, range=(0, 255))
 
@@ -266,7 +284,9 @@ class ImageProcessor:
         ax_hist.plot(bin_edges[0:-1], histogram, color="black")
         ax_hist.set_title("Histogram")
         ax_hist.set_xlim(0, 250)
-        ax_hist.set_ylim(0, 4000)
+        y_95th_percentile = np.percentile(histogram, 99)
+        y_max_limit = y_95th_percentile * 2.0 
+        ax_hist.set_ylim(0, y_max_limit)
         ax_hist.set_xlabel("Brightness")
         ax_hist.set_ylabel("Count")
 
@@ -308,7 +328,7 @@ class ImageProcessor:
         if self.index_img > 0:
             self.index_img -= 1
             self.display_image(np.array(self.roi_images[self.index_img]))
-            # self.display_histogram(np.array(roi_images[self.index_img]))
+            self.display_histogram(np.array(self.roi_images[self.index_img]))
             self.update_header_roi_number()
         else:
             messagebox.showinfo("Fim das imagens", "Essa é o primeiro ROI.")
@@ -318,7 +338,7 @@ class ImageProcessor:
         if self.index_img < num_images_per_patient - 1:
             self.index_img += 1
             self.display_image(np.array(self.roi_images[self.index_img]))
-            # self.display_histogram(np.array(roi_images[self.index_img]))
+            self.display_histogram(np.array(self.roi_images[self.index_img]))
             self.update_header_roi_number()
         else:
             messagebox.showinfo("Fim das imagens", "Essa é a último ROI.")
