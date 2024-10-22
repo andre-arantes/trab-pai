@@ -30,6 +30,7 @@ class ImageProcessor:
         self.roi_count = 0
         self.index_img = 0
         self.images = None
+        self.roi_images = []
         self.patient_number = None
         self.rect = None
         self.list = []
@@ -78,10 +79,7 @@ class ImageProcessor:
         except IndexError as e:
             messagebox.showerror("Paciente não encontrado!", str(e))
         except ValueError:
-            messagebox.showerror(
-                "Invalid input. Patient number must be an integer.",
-                "Invalid input. Patient number must be an integer.",
-            )
+            messagebox.showerror("Erro!", "O campo deve conter um número.")
 
     def main_menu(self):
         for widget in self.root.winfo_children():
@@ -143,6 +141,9 @@ class ImageProcessor:
         btn_next = tk.Button(frame, text="Próxima imagem", command=self.next_image)
         btn_next.pack(side=tk.LEFT, padx=5)
 
+        btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
+        btn_menu.pack(side=tk.LEFT, padx=5)
+
         self.display_image(self.images[0][self.patient_number][self.index_img])
         self.display_histogram(self.images[0][self.patient_number][self.index_img])
 
@@ -173,10 +174,43 @@ class ImageProcessor:
         for widget in self.root.winfo_children():
             widget.destroy()
 
+        display_frame = tk.Frame(self.root)
+        display_frame.pack(pady=20)
+
+        self.canvas_img = tk.Canvas(display_frame, width=400, height=400)
+        self.canvas_img.grid(row=0, column=0, padx=10, pady=10)
+
+        self.canvas_hist = tk.Canvas(display_frame, width=400, height=400)
+        self.canvas_hist.grid(row=0, column=1, padx=10, pady=10)
+
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
-        label = tk.Label(frame, text="TODO")
-        label.pack(side=tk.LEFT, padx=5)
+
+        self.update_header_roi_number()
+
+        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
+        roi_files = [f for f in os.listdir(patient_dir) if f.startswith("ROI_")]
+
+        if not roi_files:
+            messagebox.showinfo("Info", "Não há ROIs salvos para este paciente.")
+            return
+
+        for roi_file in roi_files:
+            roi_path = os.path.join(patient_dir, roi_file)
+            roi_img = Image.open(roi_path).convert("RGB")
+            self.roi_images.append(roi_img)
+
+        btn_prev = tk.Button(frame, text="Voltar ROI", command=self.prev_roi)
+        btn_prev.pack(side=tk.LEFT, padx=5)
+
+        btn_next = tk.Button(frame, text="Próximo ROI", command=self.next_roi)
+        btn_next.pack(side=tk.LEFT, padx=5)
+
+        btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
+        btn_menu.pack(side=tk.LEFT, padx=5)
+
+        self.display_image(np.array(self.roi_images[self.index_img]))
+        self.display_histogram(np.array(self.roi_images[self.index_img]))
 
     def compute_glcm(self):
         for widget in self.root.winfo_children():
@@ -186,6 +220,8 @@ class ImageProcessor:
         frame.pack(pady=20)
         label = tk.Label(frame, text="TODO")
         label.pack(side=tk.LEFT, padx=5)
+        btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
+        btn_menu.pack(side=tk.LEFT, padx=5)
 
     def caracterize_roi(self):
         for widget in self.root.winfo_children():
@@ -195,6 +231,8 @@ class ImageProcessor:
         frame.pack(pady=20)
         label = tk.Label(frame, text="TODO")
         label.pack(side=tk.LEFT, padx=5)
+        btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
+        btn_menu.pack(side=tk.LEFT, padx=5)
 
     def classificate_img(self):
         for widget in self.root.winfo_children():
@@ -204,6 +242,8 @@ class ImageProcessor:
         frame.pack(pady=20)
         label = tk.Label(frame, text="TODO")
         label.pack(side=tk.LEFT, padx=5)
+        btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
+        btn_menu.pack(side=tk.LEFT, padx=5)
 
     def display_image(self, image):
         self.img = Image.fromarray(image)
@@ -225,10 +265,10 @@ class ImageProcessor:
         ax_hist.clear()
         ax_hist.plot(bin_edges[0:-1], histogram, color="black")
         ax_hist.set_title("Histogram")
-        ax_hist.set_xlim(0, 255)
+        ax_hist.set_xlim(0, 250)
         ax_hist.set_ylim(0, 4000)
-        ax_hist.set_xlabel("Pixel value")
-        ax_hist.set_ylabel("Frequency")
+        ax_hist.set_xlabel("Brightness")
+        ax_hist.set_ylabel("Count")
 
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
@@ -264,17 +304,37 @@ class ImageProcessor:
         else:
             messagebox.showinfo("Fim das imagens", "Essa é a última imagem.")
 
+    def prev_roi(self):
+        if self.index_img > 0:
+            self.index_img -= 1
+            self.display_image(np.array(self.roi_images[self.index_img]))
+            # self.display_histogram(np.array(roi_images[self.index_img]))
+            self.update_header_roi_number()
+        else:
+            messagebox.showinfo("Fim das imagens", "Essa é o primeiro ROI.")
+
+    def next_roi(self):
+        num_images_per_patient = len(self.images[0][self.patient_number])
+        if self.index_img < num_images_per_patient - 1:
+            self.index_img += 1
+            self.display_image(np.array(self.roi_images[self.index_img]))
+            # self.display_histogram(np.array(roi_images[self.index_img]))
+            self.update_header_roi_number()
+        else:
+            messagebox.showinfo("Fim das imagens", "Essa é a último ROI.")
+
     def select_roi(self, event):
         global liver_roi, kidney_roi
         self.roi_count += 1
         if self.is_liver_roi():
             liver_roi = ROI(event.x, event.y)
             self.draw_rectangle(liver_roi)
-            messagebox.showinfo("Sucesso", "ROI do figado selecionado")
+            # messagebox.showinfo("Sucesso", "ROI do figado selecionado")
         else:
             kidney_roi = ROI(event.x, event.y)
+            self.create_csv()
             self.draw_rectangle(kidney_roi)
-            messagebox.showinfo("Sucesso", "ROI do rim selecionado")
+            # messagebox.showinfo("Sucesso", "ROI do rim selecionado")
             self.cut_roi(liver_roi, kidney_roi)
 
     def cut_roi(self, liver_roi, kidney_roi):
@@ -289,16 +349,16 @@ class ImageProcessor:
             HI_index = self.make_HI_index(liver_grayscale_mean, kidney_grayscale_mean)
             adjusted_roi_liver_img = self.adjust_liver_roi(roi_liver_img, HI_index)
             self.save_roi(adjusted_roi_liver_img)
-            # self.update_csv(
-            #     self.patient_number,
-            #     self.coord_x,
-            #     self.coord_y,
-            #     self.x,
-            #     self.y,
-            #     self.HI_index,
-            #     self.patient_class,
-            # )
-            if self.index_img < len(self.images[0][self.patient_number]):
+            self.update_csv(
+                self.patient_number,
+                liver_roi.x,
+                liver_roi.y,
+                kidney_roi.x,
+                kidney_roi.y,
+                HI_index,
+                self.patient_class,
+            )
+            if self.index_img + 1 < len(self.images[0][self.patient_number]):
                 self.canvas_img.delete("all")
                 self.index_img += 1
                 self.display_image(self.images[0][self.patient_number][self.index_img])
@@ -307,6 +367,12 @@ class ImageProcessor:
                 messagebox.showinfo(
                     "Info", "Não há mais imagens disponíveis para este paciente."
                 )
+                frame = tk.Frame(self.root)
+                frame.pack(pady=20)
+                btn_menu = tk.Button(
+                    frame, text="Voltar ao menu", command=self.main_menu
+                )
+                btn_menu.pack(side=tk.LEFT, padx=5)
 
     def calculate_grayscale_mean(self, roi_img):
         grayscale_image = roi_img.convert("L")
@@ -353,10 +419,10 @@ class ImageProcessor:
     def update_csv(
         self,
         patient_number,
-        x,
-        y,
-        posicao_X,
-        posicao_Y,
+        liver_roi_x,
+        liver_roi_y,
+        kidney_roi_x,
+        kidney_roi_y,
         indice_HI,
         classe_paciente,
     ):
@@ -367,10 +433,10 @@ class ImageProcessor:
 
         nova_linha = {
             "Nome do Arquivo": f"PATIENT_{patient_number}",
-            "Roi Fígado X": x,
-            "Roi Fígado Y": y,
-            "Roi Rim X": posicao_X,
-            "Roi Rim Y": posicao_Y,
+            "Roi Fígado X": liver_roi_x,
+            "Roi Fígado Y": liver_roi_y,
+            "Roi Rim X": kidney_roi_x,
+            "Roi Rim Y": kidney_roi_y,
             "Índice hepatorenal (HI)": indice_HI,
             "Classe": classe_paciente,
         }
@@ -383,10 +449,10 @@ class ImageProcessor:
             writer.writerow(
                 [
                     f"PATIENT_{patient_number}",
-                    x,
-                    y,
-                    posicao_X,
-                    posicao_Y,
+                    liver_roi_x,
+                    liver_roi_y,
+                    kidney_roi_x,
+                    kidney_roi_y,
                     indice_HI,
                     classe_paciente,
                 ]
