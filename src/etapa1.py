@@ -10,6 +10,8 @@ import os
 import numpy as np
 import io
 import functools
+from skimage.feature import graycomatrix, graycoprops
+from skimage.measure import shannon_entropy
 
 matplotlib.use("TkAgg")
 
@@ -183,6 +185,16 @@ class ImageProcessor:
 
         self.canvas_img.bind("<ButtonPress-1>", lambda event: self.select_roi(event))
         self.canvas_img.bind("<ButtonPress-1>", lambda event: self.select_roi(event))
+
+    def caculate_glcm(image):
+        return graycomatrix(image, [1], [0, np.pi/4, np.pi/2, 3*np.pi/4],
+                      levels=4)
+
+    def calculate_homogeneity(graycomatrix):
+        return graycoprops(graycomatrix, 'homogeneity')
+
+    def calculate_entropy(graycomatrix):
+        return shannon_entropy(graycomatrix)
 
     def visualize_roi_menu(self):
         for widget in self.root.winfo_children():
