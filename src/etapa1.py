@@ -12,6 +12,7 @@ import io
 import functools
 from skimage.feature import graycomatrix, graycoprops
 from skimage.measure import shannon_entropy
+import platform
 
 matplotlib.use("TkAgg")
 
@@ -151,8 +152,11 @@ class ImageProcessor:
         self.display_image(self.images[0][self.patient_number][self.index_img])
         self.display_histogram(self.images[0][self.patient_number][self.index_img])
 
-
-        self.canvas_img.bind("<MouseWheel>", functools.partial(self.zoom, image=self.images[0][self.patient_number][self.index_img]))
+        if platform.system() == "Linux":
+            self.canvas_img.bind("<Button-4>", functools.partial(self.zoom, image=self.images[0][self.patient_number][self.index_img]))
+            self.canvas_img.bind("<Button-5>", functools.partial(self.zoom, image=self.images[0][self.patient_number][self.index_img]))
+        else:
+            self.canvas_img.bind("<MouseWheel>", functools.partial(self.zoom, image=self.images[0][self.patient_number][self.index_img]))
 
     def zoom(self, event, image):
         if event.delta > 0:  # Zoom in
@@ -238,7 +242,11 @@ class ImageProcessor:
         self.display_image(np.array(self.roi_images[self.index_img]))
         self.display_histogram(np.array(self.roi_images[self.index_img]))
 
-        self.canvas_img.bind("<MouseWheel>", functools.partial(self.zoom, image=np.array(self.roi_images[self.index_img])))
+        if platform.system() == "Linux":
+            self.canvas_img.bind("<Button-4>", functools.partial(self.zoom, image=np.array(self.roi_images[self.index_img])))
+            self.canvas_img.bind("<Button-5>", functools.partial(self.zoom, image=np.array(self.roi_images[self.index_img])))
+        else:
+            self.canvas_img.bind("<MouseWheel>", functools.partial(self.zoom, image=np.array(self.roi_images[self.index_img])))
 
     def compute_glcm(self):
         for widget in self.root.winfo_children():
