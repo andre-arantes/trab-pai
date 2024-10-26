@@ -31,9 +31,7 @@ class ImageProcessor:
         self.img = None
         self.canvas_img = None
         self.canvas_hist = None
-        self.canvas_glcm = None
-        self.canvas_homo = None
-        self.canvas_ent = None
+        self.canvas_features = None
         self.roi_count = 0
         self.index_img = 0
         self.images = None
@@ -96,7 +94,6 @@ class ImageProcessor:
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
 
-        # TODO: zoom e olhar histograma
         btn_img_visualization = tk.Button(
             frame, text="Menu de visualização", command=self.visualization_menu
         )
@@ -250,14 +247,8 @@ class ImageProcessor:
         display_frame = tk.Frame(self.root)
         display_frame.pack(pady=20)
 
-        self.canvas_glcm = tk.Canvas(display_frame, width=400, height=400)
-        self.canvas_glcm.grid(row=0, column=0, padx=10, pady=10)
-
-        self.canvas_homo = tk.Canvas(display_frame, width=400, height=400)
-        self.canvas_homo.grid(row=0, column=1, padx=10, pady=10)
-
-        self.canvas_ent = tk.Canvas(display_frame, width=400, height=400)
-        self.canvas_ent.grid(row=0, column=2, padx=10, pady=10)
+        self.canvas_features = tk.Canvas(display_frame, width=400, height=400)
+        self.canvas_features.grid(row=0, column=0, padx=10, pady=10)
 
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
@@ -285,13 +276,11 @@ class ImageProcessor:
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
 
-        glcm = self.radial_glcm(np.array(self.roi_images[self.index_img]))
-        homogeneity = self.calculate_homogeneity(glcm)
+        glcm = self.glcm(np.array(self.roi_images[self.index_img]))
+        features = self.glcm_features(glcm)
         entropy = shannon_entropy(glcm)
 
-        self.display_glcm(glcm)
-        self.display_homo(homogeneity)
-        self.display_entropy(entropy)
+        self.display_features(features, entropy)
 
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
@@ -300,17 +289,25 @@ class ImageProcessor:
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
 
-    def display_glcm(self, glcm_radial):
-        plt.figure(figsize=(8, 8))
-        plt.imshow(glcm_radial, cmap='gray')
-        plt.title('Radial GLCM')
-        plt.colorbar(label='Frequency')
-        plt.xlabel('Gray Level')
-        plt.ylabel('Gray Level')
-        plt.xticks(np.arange(0, 256, step=16))
-        plt.yticks(np.arange(0, 256, step=16))
-        plt.grid(False)
-        plt.show()
+    def display_features(self, features, entropy):
+    
+            # Creating subplots
+        fig, axes = plt.subplots(2, 2, figsize=(8, 8))
+        fig.suptitle('GLCM Features', fontsize=8)
+        plt.figtext(0.5, 0.02, f'Shannon Entropy: {entropy}', ha='center', fontsize=12)
+
+        # Plotting each feature
+        feature_names = list(features.keys())
+        for i, feature_name in enumerate(feature_names):
+            ax = axes[i // 2, i % 2]
+            ax.bar(range(len(features[feature_name])), features[feature_name])
+            ax.set_title(feature_name)
+            ax.set_xlabel('Distance/Angle Index')
+            ax.set_ylabel(feature_name)
+            ax.set_xticks(range(len(features[feature_name])))
+            ax.set_xticklabels([f'Distance {d}, Angle {"{:.2f}".format(a)}' for d in [1, 2, 4, 8] for a in [0, np.pi/4, np.pi/2, 3*np.pi/4]], rotation=45, fontsize=6)
+
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
@@ -319,85 +316,30 @@ class ImageProcessor:
         hist_img = Image.open(buf)
         hist_tk = ImageTk.PhotoImage(hist_img)
 
-        self.canvas_glcm.config(width=hist_img.width, height=hist_img.height)
-        self.canvas_glcm.create_image(0, 0, anchor=tk.NW, image=hist_tk)
-        self.canvas_glcm.image = hist_tk
+        self.canvas_features.config(width=hist_img.width, height=hist_img.height)
+        self.canvas_features.create_image(0, 0, anchor=tk.NW, image=hist_tk)
+        self.canvas_features.image = hist_tk
 
         buf.close()
 
-    def display_homo(self, homogeneity):
-
-        plt.figure(figsize=(6, 4))
-        plt.bar(['Homogeneity'], [homogeneity], color='skyblue')
-        plt.ylim(0, 1)  # Set the y-axis limit for better visualization
-        plt.title('Homogeneity of GLCM')
-        plt.ylabel('Value')
-        plt.grid(axis='y')
-        plt.show()
-
-        buf = io.BytesIO()
-        plt.savefig(buf, format="png")
-        buf.seek(0)
-
-        hist_img = Image.open(buf)
-        hist_tk = ImageTk.PhotoImage(hist_img)
-
-        self.canvas_homo.config(width=hist_img.width, height=hist_img.height)
-        self.canvas_homo.create_image(0, 0, anchor=tk.NW, image=hist_tk)
-        self.canvas_homo.image = hist_tk
-
-    def display_entropy(self, entropy):
-        plt.figure(figsize=(6, 4))
-        plt.bar(['Shannon Entropy'], [entropy], color='lightcoral')
-        plt.ylim(0, 8)  # Typical range for 8-bit images
-        plt.title('Shannon Entropy of Grayscale Image')
-        plt.ylabel('Entropy Value')
-        plt.grid(axis='y')
-        plt.show()
-
-        buf = io.BytesIO()
-        plt.savefig(buf, format="png")
-        buf.seek(0)
-
-        hist_img = Image.open(buf)
-        hist_tk = ImageTk.PhotoImage(hist_img)
-
-        self.canvas_ent.config(width=hist_img.width, height=hist_img.height)
-        self.canvas_ent.create_image(0, 0, anchor=tk.NW, image=hist_tk)
-        self.canvas_ent.image = hist_tk
-
-    def radial_glcm(self, image):
-
-        levels = 256
-
-        image = (image * (levels - 1)).astype(np.uint8)
+        plt.close(fig)
         
-        angles = np.linspace(0, 2 * np.pi, num=16, endpoint=False)
-        
-        glcm_radial = np.zeros((levels, levels), dtype=np.float64)
+    def glcm(self, image):
+        return graycomatrix(image, [1, 2, 4, 8], [0, np.pi/4, np.pi/2, 3*np.pi/4], levels=256, symmetric=True, normed=True)
 
-        distances = [1, 2, 4, 8]
-        
-        for distance in distances:
-            for angle in angles:
-
-                glcm = graycomatrix(image, distances=[distance], angles=[angle], levels=levels, symmetric=True, normed=True)
-
-                glcm_radial += glcm[:, :, 0, 0] 
-        
-        glcm_radial /= (16 * len(distances))
-
-        print("glcm")
-        print(glcm_radial.shape)
-        
-        return glcm_radial
-
-    def calculate_homogeneity(self, glcm):
-        homogeneity = np.sum(glcm / (1 + np.abs(np.arange(glcm.shape[0])[:, None] - np.arange(glcm.shape[1]))))
-        return homogeneity
-
-    def calculate_entropy(self, graycomatrix):
-        return shannon_entropy(graycomatrix)
+    def glcm_features(self, glcm):
+        contrast = graycoprops(glcm, "contrast").flatten()
+        energy = graycoprops(glcm, "energy").flatten()
+        homogeneity = graycoprops(glcm, "homogeneity").flatten()
+        correlation = graycoprops(glcm, "correlation").flatten()
+        glcm_features = {
+            "Contrast": contrast,
+            "Energy": energy,
+            "Homogeneity": homogeneity,
+            "Correlation": correlation
+        }
+        return glcm_features
+    
 
     def caracterize_roi(self):
         for widget in self.root.winfo_children():
@@ -433,7 +375,6 @@ class ImageProcessor:
         self.canvas_img.image = img_tk
 
     def display_histogram(self, image):
-        print(image.shape)
     
         image = Image.fromarray(image)
         histogram, bin_edges = np.histogram(image, bins=256, range=(0, 255))
