@@ -267,10 +267,10 @@ class ImageProcessor:
             roi_img = Image.open(roi_path).convert("L")
             self.roi_images.append(roi_img)
 
-        btn_prev = tk.Button(frame, text="Voltar ROI", command=self.prev_roi)
+        btn_prev = tk.Button(frame, text="Voltar ROI", command=self.prev_glcm)
         btn_prev.pack(side=tk.LEFT, padx=5)
 
-        btn_next = tk.Button(frame, text="Próximo ROI", command=self.next_roi)
+        btn_next = tk.Button(frame, text="Próximo ROI", command=self.next_glcm)
         btn_next.pack(side=tk.LEFT, padx=5)
 
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
@@ -289,9 +289,35 @@ class ImageProcessor:
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
 
+    def prev_glcm(self):
+        if self.index_img > 0:
+            self.index_img -= 1
+            glcm = self.glcm(np.array(self.roi_images[self.index_img]))
+            features = self.glcm_features(glcm)
+            entropy = shannon_entropy(glcm)
+
+            self.display_features(features, entropy)
+            self.update_header_roi_number()
+        else:
+            messagebox.showinfo("Fim das imagens", "Essa é o primeiro ROI.")
+
+    def next_glcm(self):
+        num_images_per_patient = len(self.images[0][self.patient_number])
+        if self.index_img < num_images_per_patient - 1:
+            self.index_img += 1
+            glcm = self.glcm(np.array(self.roi_images[self.index_img]))
+            features = self.glcm_features(glcm)
+            entropy = shannon_entropy(glcm)
+
+            self.display_features(features, entropy)
+            self.update_header_roi_number()
+        else:
+            messagebox.showinfo("Fim das imagens", "Essa é a último ROI.")
+
+
     def display_features(self, features, entropy):
     
-            # Creating subplots
+         # Creating subplots
         fig, axes = plt.subplots(2, 2, figsize=(8, 8))
         fig.suptitle('GLCM Features', fontsize=8)
         plt.figtext(0.5, 0.02, f'Shannon Entropy: {entropy}', ha='center', fontsize=12)
@@ -670,7 +696,7 @@ class ImageProcessor:
 
 root = tk.Tk()
 root.title("Visualizador de Imagens")
-root.geometry("1600x800")
+root.attributes('-fullscreen', True) 
 
 app = ImageProcessor(root)
 
