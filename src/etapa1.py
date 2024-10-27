@@ -285,7 +285,7 @@ class ImageProcessor:
 
         self.update_header_roi_number()
 
-        patient_dir = os.path.abspath(f"images/PATIENT_{self.patient_number}/")
+        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
         roi_files = [f for f in os.listdir(patient_dir) if f.startswith("ROI_")]
 
         if not roi_files:
