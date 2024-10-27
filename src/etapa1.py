@@ -122,8 +122,40 @@ class ImageProcessor:
         btn_classificate_img = tk.Button(
             frame, text="Classificar imagem", command=self.classificate_img
         )
+
+        btn_classificate_img = tk.Button(
+            frame, text="Escolher outro paciente", command=self.reset_variables
+        )    
+
         btn_classificate_img.pack(side=tk.LEFT, padx=5)
 
+    def reset_variables(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        self.img = None
+        self.canvas_img = None
+        self.canvas_hist = None
+        self.canvas_glcm = None
+        self.canvas_homo = None
+        self.canvas_ent = None
+        self.roi_count = 0
+        self.index_img = 0
+        self.images = None
+        self.roi_images = []
+        self.patient_number = None
+        self.rect = None
+        self.list = []
+        self.nome_arquivo_csv = "Dados.csv"
+        self.patient_class = ""
+        self.zoom_level = 1.0
+        self.initial_menu()
+
+
+    
     def visualization_menu(self):
         for widget in self.root.winfo_children():
             widget.destroy()
@@ -241,6 +273,9 @@ class ImageProcessor:
         btn_prev.pack(side=tk.LEFT, padx=5)
 
         btn_next = tk.Button(frame, text="Próximo ROI", command=self.next_roi)
+        btn_next.pack(side=tk.LEFT, padx=5)
+
+        btn_next = tk.Button(frame, text="Zoom", command=self.zoom_roi)
         btn_next.pack(side=tk.LEFT, padx=5)
 
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
@@ -501,6 +536,14 @@ class ImageProcessor:
 
         plt.close(fig)
 
+    def display_roi(self, image):
+        self.img = Image.fromarray(image)
+        plt.figure(figsize=(8, 8))
+        plt.imshow(self.img, cmap='gray')
+        plt.title('ROI')
+        plt.grid(False)
+        plt.show()
+    
     def prev_image(self):
         if self.index_img > 0:
             self.index_img -= 1
@@ -539,6 +582,10 @@ class ImageProcessor:
         else:
             messagebox.showinfo("Fim das imagens", "Essa é o último ROI.")
 
+    def zoom_roi(self):
+        self.display_roi(np.array(self.roi_images[self.index_img]))
+  
+    
     def select_roi(self, event):
         global liver_roi, kidney_roi
         self.roi_count += 1
