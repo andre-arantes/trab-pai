@@ -13,6 +13,7 @@ import functools
 from skimage.feature import graycomatrix, graycoprops
 from skimage.measure import shannon_entropy
 import platform
+import cv2
 
 matplotlib.use("TkAgg")
 
@@ -42,6 +43,7 @@ class ImageProcessor:
         self.nome_arquivo_csv = "Dados.csv"
         self.patient_class = ""
         self.zoom_level = 1.0
+        self.adjusted_roi_liver_img = None
         self.initial_menu()
 
     def initial_menu(self):
@@ -60,8 +62,8 @@ class ImageProcessor:
     def setup_menu(self):
         try:
             self.patient_number = int(self.entry_n.get())
-
-            path_input_dir = Path("data")
+            # Rode o código a partir da rota trab-pai/src
+            path_input_dir = Path("../data")
             path_data = (
                 path_input_dir / "dataset_liver_bmodes_steatosis_assessment_IJCARS.mat"
             )
@@ -153,10 +155,25 @@ class ImageProcessor:
         self.display_histogram(self.images[0][self.patient_number][self.index_img])
 
         if platform.system() == "Linux":
-            self.canvas_img.bind("<Button-4>", functools.partial(self.zoom, image=self.images[0][self.patient_number][self.index_img]))
-            self.canvas_img.bind("<Button-5>", functools.partial(self.zoom, image=self.images[0][self.patient_number][self.index_img]))
+            self.canvas_img.bind(
+                "<Button-4>",
+                functools.partial(
+                    self.zoom, image=self.images[0][self.patient_number][self.index_img]
+                ),
+            )
+            self.canvas_img.bind(
+                "<Button-5>",
+                functools.partial(
+                    self.zoom, image=self.images[0][self.patient_number][self.index_img]
+                ),
+            )
         else:
-            self.canvas_img.bind("<MouseWheel>", functools.partial(self.zoom, image=self.images[0][self.patient_number][self.index_img]))
+            self.canvas_img.bind(
+                "<MouseWheel>",
+                functools.partial(
+                    self.zoom, image=self.images[0][self.patient_number][self.index_img]
+                ),
+            )
 
     def zoom(self, event, image):
         if event.delta > 0:  # Zoom in
@@ -208,7 +225,7 @@ class ImageProcessor:
 
         self.update_header_roi_number()
 
-        patient_dir = os.path.abspath(f"images/PATIENT_{self.patient_number}/")
+        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
         roi_files = [f for f in os.listdir(patient_dir) if f.startswith("ROI_")]
 
         if not roi_files:
@@ -233,12 +250,25 @@ class ImageProcessor:
         self.display_histogram(np.array(self.roi_images[self.index_img]))
 
         if platform.system() == "Linux":
-            self.canvas_img.bind("<Button-4>", functools.partial(self.zoom, image=np.array(self.roi_images[self.index_img])))
-            self.canvas_img.bind("<Button-5>", functools.partial(self.zoom, image=np.array(self.roi_images[self.index_img])))
+            self.canvas_img.bind(
+                "<Button-4>",
+                functools.partial(
+                    self.zoom, image=np.array(self.roi_images[self.index_img])
+                ),
+            )
+            self.canvas_img.bind(
+                "<Button-5>",
+                functools.partial(
+                    self.zoom, image=np.array(self.roi_images[self.index_img])
+                ),
+            )
         else:
-            self.canvas_img.bind("<MouseWheel>", functools.partial(self.zoom, image=np.array(self.roi_images[self.index_img])))
-
-    
+            self.canvas_img.bind(
+                "<MouseWheel>",
+                functools.partial(
+                    self.zoom, image=np.array(self.roi_images[self.index_img])
+                ),
+            )
 
     def compute_glcm(self):
         for widget in self.root.winfo_children():
@@ -314,13 +344,11 @@ class ImageProcessor:
         else:
             messagebox.showinfo("Fim das imagens", "Essa é a último ROI.")
 
-
     def display_features(self, features, entropy):
-    
-         # Creating subplots
+        # Creating subplots
         fig, axes = plt.subplots(2, 2, figsize=(8, 8))
-        fig.suptitle('GLCM Features', fontsize=8)
-        plt.figtext(0.5, 0.02, f'Shannon Entropy: {entropy}', ha='center', fontsize=12)
+        fig.suptitle("GLCM Features", fontsize=8)
+        plt.figtext(0.5, 0.02, f"Shannon Entropy: {entropy}", ha="center", fontsize=12)
 
         # Plotting each feature
         feature_names = list(features.keys())
@@ -328,10 +356,18 @@ class ImageProcessor:
             ax = axes[i // 2, i % 2]
             ax.bar(range(len(features[feature_name])), features[feature_name])
             ax.set_title(feature_name)
-            ax.set_xlabel('Distance/Angle Index')
+            ax.set_xlabel("Distance/Angle Index")
             ax.set_ylabel(feature_name)
             ax.set_xticks(range(len(features[feature_name])))
-            ax.set_xticklabels([f'Distance {d}, Angle {"{:.2f}".format(a)}' for d in [1, 2, 4, 8] for a in [0, np.pi/4, np.pi/2, 3*np.pi/4]], rotation=45, fontsize=6)
+            ax.set_xticklabels(
+                [
+                    f'Distance {d}, Angle {"{:.2f}".format(a)}'
+                    for d in [1, 2, 4, 8]
+                    for a in [0, np.pi / 4, np.pi / 2, 3 * np.pi / 4]
+                ],
+                rotation=45,
+                fontsize=6,
+            )
 
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
@@ -349,9 +385,16 @@ class ImageProcessor:
         buf.close()
 
         plt.close(fig)
-        
+
     def glcm(self, image):
-        return graycomatrix(image, [1, 2, 4, 8], [0, np.pi/4, np.pi/2, 3*np.pi/4], levels=256, symmetric=True, normed=True)
+        return graycomatrix(
+            image,
+            [1, 2, 4, 8],
+            [0, np.pi / 4, np.pi / 2, 3 * np.pi / 4],
+            levels=256,
+            symmetric=True,
+            normed=True,
+        )
 
     def glcm_features(self, glcm):
         contrast = graycoprops(glcm, "contrast").flatten()
@@ -362,19 +405,42 @@ class ImageProcessor:
             "Contrast": contrast,
             "Energy": energy,
             "Homogeneity": homogeneity,
-            "Correlation": correlation
+            "Correlation": correlation,
         }
         return glcm_features
-    
 
     def caracterize_roi(self):
+        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
         for widget in self.root.winfo_children():
             widget.destroy()
 
+        csv_file_path = "Dados.csv"
+        new_column_name = "Hu Moments"
+
+        with open(csv_file_path, mode="r", newline="", encoding="utf-8") as arquivo_csv:
+            reader = csv.reader(csv_file_path)
+            lines = list(reader)
+
+        lines[0].append(new_column_name)
+
+        with open(csv_file_path, mode="w", newline="", encoding="utf-8") as arquivo_csv:
+            writer = csv.writer(arquivo_csv)
+            writer.writerows(lines)
+
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
-        label = tk.Label(frame, text="TODO")
-        label.pack(side=tk.LEFT, padx=5)
+
+        roi_files = [f for f in os.listdir(patient_dir) if f.startswith("ROI_")]
+
+        for roi_file in roi_files:
+            roi_path = os.path.join(patient_dir, roi_file)
+            roi_img = Image.open(roi_path).convert("RGB")
+            hu_moments = self.hu_moment_invariants(np.array(roi_img))
+
+            print("Momentos Invariantes de Hu:")
+            for i, moment in enumerate(hu_moments, 1):
+                print(f"Hu[{i}]: {moment}")
+
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
 
@@ -391,9 +457,13 @@ class ImageProcessor:
 
     def display_image(self, image):
         self.img = Image.fromarray(image)
-        self.img = self.img.resize((int(self.img.width * self.zoom_level), 
-                                     int(self.img.height * self.zoom_level)), 
-                                     Image.Resampling.LANCZOS) 
+        self.img = self.img.resize(
+            (
+                int(self.img.width * self.zoom_level),
+                int(self.img.height * self.zoom_level),
+            ),
+            Image.Resampling.LANCZOS,
+        )
         img_tk = ImageTk.PhotoImage(self.img)
 
         self.canvas_img.config(width=self.img.width, height=self.img.height)
@@ -401,7 +471,6 @@ class ImageProcessor:
         self.canvas_img.image = img_tk
 
     def display_histogram(self, image):
-    
         image = Image.fromarray(image)
         histogram, bin_edges = np.histogram(image, bins=256, range=(0, 255))
 
@@ -412,7 +481,7 @@ class ImageProcessor:
         ax_hist.set_title("Histogram")
         ax_hist.set_xlim(0, 250)
         y_95th_percentile = np.percentile(histogram, 99)
-        y_max_limit = y_95th_percentile * 2.0 
+        y_max_limit = y_95th_percentile * 2.0
         ax_hist.set_ylim(0, y_max_limit)
         ax_hist.set_xlabel("Brightness")
         ax_hist.set_ylabel("Count")
@@ -468,7 +537,7 @@ class ImageProcessor:
             self.display_histogram(np.array(self.roi_images[self.index_img]))
             self.update_header_roi_number()
         else:
-            messagebox.showinfo("Fim das imagens", "Essa é a último ROI.")
+            messagebox.showinfo("Fim das imagens", "Essa é o último ROI.")
 
     def select_roi(self, event):
         global liver_roi, kidney_roi
@@ -476,12 +545,12 @@ class ImageProcessor:
         if self.is_liver_roi():
             liver_roi = ROI(event.x, event.y)
             self.draw_rectangle(liver_roi)
-            # messagebox.showinfo("Sucesso", "ROI do figado selecionado")
+            messagebox.showinfo("Sucesso", "ROI do figado selecionado")
         else:
             kidney_roi = ROI(event.x, event.y)
             self.create_csv()
             self.draw_rectangle(kidney_roi)
-            # messagebox.showinfo("Sucesso", "ROI do rim selecionado")
+            messagebox.showinfo("Sucesso", "ROI do rim selecionado")
             self.cut_roi(liver_roi, kidney_roi)
 
     def cut_roi(self, liver_roi, kidney_roi):
@@ -494,8 +563,8 @@ class ImageProcessor:
         self.update_header_roi_number()
         if self.roi_count == 2:
             HI_index = self.make_HI_index(liver_grayscale_mean, kidney_grayscale_mean)
-            adjusted_roi_liver_img = self.adjust_liver_roi(roi_liver_img, HI_index)
-            self.save_roi(adjusted_roi_liver_img)
+            self.adjusted_roi_liver_img = self.adjust_liver_roi(roi_liver_img, HI_index)
+            self.save_roi(self.adjusted_roi_liver_img)
             self.update_csv(
                 self.patient_number,
                 liver_roi.x,
@@ -693,10 +762,17 @@ class ImageProcessor:
         messagebox.showinfo("Índice HI", f"O índice HI é: {HI_index:.2f}")
         return HI_index
 
+    def hu_moment_invariants(self, roi_img):
+        image = cv2.cvtColor(np.array(roi_img), cv2.COLOR_RGB2GRAY)
+
+        feature = cv2.HuMoments(cv2.moments(image)).flatten()
+
+        return feature
+
 
 root = tk.Tk()
 root.title("Visualizador de Imagens")
-root.attributes('-fullscreen', True) 
+root.attributes("-fullscreen", True)
 
 app = ImageProcessor(root)
 
