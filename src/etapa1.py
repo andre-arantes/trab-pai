@@ -41,7 +41,7 @@ class ImageProcessor:
         self.patient_number = None
         self.rect = None
         self.list = []
-        self.nome_arquivo_csv = "Dados.csv"
+        self.csv_file_name = "Dados.csv"
         self.file_name_classifier = "dados_classificador.csv"
         self.file_name_glmc = "dados_glmc.csv"
         self.patient_class = ""
@@ -65,8 +65,7 @@ class ImageProcessor:
     def setup_menu(self):
         try:
             self.patient_number = int(self.entry_n.get())
-            # Rode o código a partir da rota trab-pai/src
-            path_input_dir = Path("../data")
+            path_input_dir = Path("data")
             path_data = (
                 path_input_dir / "dataset_liver_bmodes_steatosis_assessment_IJCARS.mat"
             )
@@ -152,7 +151,7 @@ class ImageProcessor:
         self.patient_number = None
         self.rect = None
         self.list = []
-        self.nome_arquivo_csv = "Dados.csv"
+        self.csv_file_name = "Dados.csv"
         self.patient_class = ""
         self.zoom_level = 1.0
         self.initial_menu()
@@ -260,7 +259,7 @@ class ImageProcessor:
 
         self.update_header_roi_number()
 
-        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
+        patient_dir = os.path.abspath(f"images/PATIENT_{self.patient_number}/")
         roi_files = [f for f in os.listdir(patient_dir) if f.startswith("ROI_")]
 
         if not roi_files:
@@ -323,7 +322,7 @@ class ImageProcessor:
 
         self.update_header_roi_number()
 
-        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
+        patient_dir = os.path.abspath(f"images/PATIENT_{self.patient_number}/")
         roi_files = [f for f in os.listdir(patient_dir) if f.startswith("ROI_")]
 
         if not roi_files:
@@ -351,20 +350,13 @@ class ImageProcessor:
 
         features_csv = self.glcm_features_csv(glcm, entropy)
         self.create_glcm_csv(features_csv, entropy, self.patient_number, self.file_name_glmc)
-        
-        
-        # print(f"GLCM: {glcm}")
-        # print(f"features: {features}")
-        # print(f"entropy: {entropy}")
-
+    
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
-        label = tk.Label(frame, text="TODO")
-        label.pack(side=tk.LEFT, padx=5)
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
 
-    def create_glcm_csv(self, features, entropy, patient_number, file_name_glmc):
+    def create_glcm_csv(self, features, file_name_glmc):
         df = pd.DataFrame(features)
         df.to_csv(file_name_glmc, index=False)
         print(f"Arquivo '{file_name_glmc}' salvo com sucesso.")
@@ -479,7 +471,7 @@ class ImageProcessor:
         return glcm_features
 
     def caracterize_roi(self):
-        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
+        patient_dir = os.path.abspath(f"images/PATIENT_{self.patient_number}/")
         for widget in self.root.winfo_children():
             widget.destroy()
 
@@ -517,7 +509,6 @@ class ImageProcessor:
 
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
-        label = tk.Label(frame, text="TODO")
         label.pack(side=tk.LEFT, padx=5)
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
@@ -738,7 +729,7 @@ class ImageProcessor:
         self.list.append(nova_linha)
 
         with open(
-            self.nome_arquivo_csv, mode="a", newline="", encoding="utf-8"
+            self.csv_file_name, mode="a", newline="", encoding="utf-8"
         ) as arquivo_csv:
             writer = csv.writer(arquivo_csv)
             writer.writerow(
@@ -766,9 +757,9 @@ class ImageProcessor:
             writer.writerow(line_in_list)
 
     def create_csv(self):
-        if not os.path.exists(self.nome_arquivo_csv):
+        if not os.path.exists(self.csv_file_name):
             with open(
-                self.nome_arquivo_csv, mode="w", newline="", encoding="utf-8"
+                self.csv_file_name, mode="w", newline="", encoding="utf-8"
             ) as arquivo_csv:
                 writer = csv.writer(arquivo_csv)
                 writer.writerow(
