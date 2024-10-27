@@ -14,6 +14,7 @@ from skimage.feature import graycomatrix, graycoprops
 from skimage.measure import shannon_entropy
 import platform
 import cv2
+import pandas as pd
 
 matplotlib.use("TkAgg")
 
@@ -41,6 +42,8 @@ class ImageProcessor:
         self.rect = None
         self.list = []
         self.nome_arquivo_csv = "Dados.csv"
+        self.file_name_classifier = "dados_classificador.csv"
+        self.file_name_glmc = "dados_glmc.csv"
         self.patient_class = ""
         self.zoom_level = 1.0
         self.adjusted_roi_liver_img = None
@@ -344,8 +347,15 @@ class ImageProcessor:
         glcm = self.glcm(np.array(self.roi_images[self.index_img]))
         features = self.glcm_features(glcm)
         entropy = shannon_entropy(glcm)
-
         self.display_features(features, entropy)
+
+        features_csv = self.glcm_features_csv(glcm, entropy)
+        self.create_glcm_csv(features_csv, entropy, self.patient_number, self.file_name_glmc)
+        
+        
+        # print(f"GLCM: {glcm}")
+        # print(f"features: {features}")
+        # print(f"entropy: {entropy}")
 
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
@@ -354,6 +364,12 @@ class ImageProcessor:
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
 
+    def create_glcm_csv(self, features, entropy, patient_number, file_name_glmc):
+        df = pd.DataFrame(features)
+        df.to_csv(file_name_glmc, index=False)
+        print(f"Arquivo '{file_name_glmc}' salvo com sucesso.")
+
+    
     def prev_glcm(self):
         if self.index_img > 0:
             self.index_img -= 1
@@ -443,24 +459,31 @@ class ImageProcessor:
             "Correlation": correlation,
         }
         return glcm_features
+    
+    def glcm_features_csv(self, glcm, entropy):
+        contrast = graycoprops(glcm, "contrast").flatten()
+        energy = graycoprops(glcm, "energy").flatten()
+        homogeneity = graycoprops(glcm, "homogeneity").flatten()
+        correlation = graycoprops(glcm, "correlation").flatten()
+        
+
+        glcm_features = {
+            "Número do Paciente": f"PATIENT_{self.patient_number}",
+            "Número da ROI:": self.index_img,
+            "Contrast": contrast,
+            "Energy": energy,
+            "Homogeneity": homogeneity,
+            "Correlation": correlation,
+            "Entropia": entropy
+        }
+        return glcm_features
 
     def caracterize_roi(self):
         patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
         for widget in self.root.winfo_children():
             widget.destroy()
 
-        csv_file_path = "Dados.csv"
-        new_column_name = "Hu Moments"
-
-        with open(csv_file_path, mode="r", newline="", encoding="utf-8") as arquivo_csv:
-            reader = csv.reader(csv_file_path)
-            lines = list(reader)
-
-        lines[0].append(new_column_name)
-
-        with open(csv_file_path, mode="w", newline="", encoding="utf-8") as arquivo_csv:
-            writer = csv.writer(arquivo_csv)
-            writer.writerows(lines)
+        self.create_classifier_csv()
 
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
@@ -471,10 +494,19 @@ class ImageProcessor:
             roi_path = os.path.join(patient_dir, roi_file)
             roi_img = Image.open(roi_path).convert("RGB")
             hu_moments = self.hu_moment_invariants(np.array(roi_img))
+            
+            if self.patient_number <= 16 :
+                input_line = f"PATIENT_{self.patient_number},Paciente Saudável"
+            else:
+                input_line = f"PATIENT_{self.patient_number},Paciente com Esteatose"
 
+            
             print("Momentos Invariantes de Hu:")
             for i, moment in enumerate(hu_moments, 1):
-                print(f"Hu[{i}]: {moment}")
+                input_line = input_line + f",{moment}"
+                # print(f"Hu[{i}]: {moment}")
+
+            self.classifier_add_line_csv(input_line)
 
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
@@ -720,6 +752,18 @@ class ImageProcessor:
                     classe_paciente,
                 ]
             )
+    def classifier_add_line_csv(
+        self,
+        input_line
+        
+    ):
+
+        line_in_list = input_line.split(",")
+        with open(
+            self.file_name_classifier, mode="a", newline="", encoding="utf-8"
+        ) as arquivo_csv:
+            writer = csv.writer(arquivo_csv, delimiter=",")
+            writer.writerow(line_in_list)
 
     def create_csv(self):
         if not os.path.exists(self.nome_arquivo_csv):
@@ -736,6 +780,26 @@ class ImageProcessor:
                         "Roi Rim Y",
                         "Índice hepatorenal (HI)",
                         "Classe",
+                    ]
+                )
+
+    def create_classifier_csv(self):
+        if not os.path.exists(self.file_name_classifier):
+            with open(
+                self.file_name_classifier, mode="w", newline="", encoding="utf-8"
+            ) as arquivo_csv:
+                writer = csv.writer(arquivo_csv)
+                writer.writerow(
+                    [
+                        "Nome do Arquivo",
+                        "Classe",
+                        "Hu 1",
+                        "Hu 2",
+                        "Hu 3",
+                        "Hu 4",
+                        "Hu 5",
+                        "Hu 6",
+                        "Hu 7",
                     ]
                 )
 
