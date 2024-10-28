@@ -511,6 +511,8 @@ class ImageProcessor:
 
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
+        label = tk.Label(frame, text="TODO (parte 2)")
+        label.pack(side=tk.LEFT, padx=5)
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
 
