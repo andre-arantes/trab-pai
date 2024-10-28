@@ -33,18 +33,16 @@ class ImageProcessor:
         self.img = None
         self.canvas_img = None
         self.canvas_hist = None
-        self.canvas_features = None
+        self.canvas_glcm_props = None
         self.roi_count = 0
         self.index_img = 0
         self.images = None
         self.roi_images = []
         self.patient_number = None
         self.rect = None
-        self.list = []
-        self.csv_file_name = "Dados.csv"
+        self.file_name_roi_data = "dados_roi.csv"
         self.file_name_classifier = "dados_classificador.csv"
         self.file_name_glmc = "dados_glmc.csv"
-        self.patient_class = ""
         self.zoom_level = 1.0
         self.adjusted_roi_liver_img = None
         self.initial_menu()
@@ -65,7 +63,7 @@ class ImageProcessor:
     def setup_menu(self):
         try:
             self.patient_number = int(self.entry_n.get())
-            path_input_dir = Path("data")
+            path_input_dir = Path("../data")
             path_data = (
                 path_input_dir / "dataset_liver_bmodes_steatosis_assessment_IJCARS.mat"
             )
@@ -124,14 +122,14 @@ class ImageProcessor:
         btn_classificate_img = tk.Button(
             frame, text="Classificar imagem", command=self.classificate_img
         )
-
-        btn_classificate_img = tk.Button(
-            frame, text="Escolher outro paciente", command=self.reset_variables
-        )    
-
         btn_classificate_img.pack(side=tk.LEFT, padx=5)
 
-    def reset_variables(self):
+        btn_change_patient = tk.Button(
+            frame, text="Escolher outro paciente", command=self.processor_factory
+        )
+        btn_change_patient.pack(side=tk.LEFT, padx=5)
+
+    def processor_factory(self):
         for widget in self.root.winfo_children():
             widget.destroy()
 
@@ -150,14 +148,10 @@ class ImageProcessor:
         self.roi_images = []
         self.patient_number = None
         self.rect = None
-        self.list = []
-        self.csv_file_name = "Dados.csv"
-        self.patient_class = ""
+        self.file_name_roi_data = "dados_roi.csv"
         self.zoom_level = 1.0
         self.initial_menu()
 
-
-    
     def visualization_menu(self):
         for widget in self.root.winfo_children():
             widget.destroy()
@@ -210,12 +204,11 @@ class ImageProcessor:
             )
 
     def zoom(self, event, image):
-        if event.delta > 0:  # Zoom in
+        if event.delta > 0:
             self.zoom_level *= 1.1
-        else:  # Zoom out
+        else:
             self.zoom_level *= 0.9
 
-        # display the image again with the new zoom level
         self.display_image(image)
 
     def cut_roi_menu(self):
@@ -259,7 +252,7 @@ class ImageProcessor:
 
         self.update_header_roi_number()
 
-        patient_dir = os.path.abspath(f"images/PATIENT_{self.patient_number}/")
+        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
         roi_files = [f for f in os.listdir(patient_dir) if f.startswith("ROI_")]
 
         if not roi_files:
@@ -277,8 +270,8 @@ class ImageProcessor:
         btn_next = tk.Button(frame, text="Próximo ROI", command=self.next_roi)
         btn_next.pack(side=tk.LEFT, padx=5)
 
-        btn_next = tk.Button(frame, text="Zoom", command=self.zoom_roi)
-        btn_next.pack(side=tk.LEFT, padx=5)
+        btn_zoom = tk.Button(frame, text="Zoom", command=self.zoom_roi)
+        btn_zoom.pack(side=tk.LEFT, padx=5)
 
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
@@ -314,21 +307,22 @@ class ImageProcessor:
         display_frame = tk.Frame(self.root)
         display_frame.pack(pady=20)
 
-        self.canvas_features = tk.Canvas(display_frame, width=400, height=400)
-        self.canvas_features.grid(row=0, column=0, padx=10, pady=10)
+        self.canvas_glcm_props = tk.Canvas(display_frame, width=400, height=400)
+        self.canvas_glcm_props.grid(row=0, column=0, padx=10, pady=10)
 
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
 
         self.update_header_roi_number()
 
-        patient_dir = os.path.abspath(f"images/PATIENT_{self.patient_number}/")
+        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
         roi_files = [f for f in os.listdir(patient_dir) if f.startswith("ROI_")]
 
         if not roi_files:
             messagebox.showinfo("Info", "Não há ROIs salvos para este paciente.")
             return
 
+        self.roi_images = []
         for roi_file in roi_files:
             roi_path = os.path.join(patient_dir, roi_file)
             roi_img = Image.open(roi_path).convert("L")
@@ -340,37 +334,39 @@ class ImageProcessor:
         btn_next = tk.Button(frame, text="Próximo ROI", command=self.next_glcm)
         btn_next.pack(side=tk.LEFT, padx=5)
 
-        btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
-        btn_menu.pack(side=tk.LEFT, padx=5)
+        self.index_img = 0
 
         glcm = self.glcm(np.array(self.roi_images[self.index_img]))
-        features = self.glcm_features(glcm)
+        props = self.glcm_props(glcm)
         entropy = shannon_entropy(glcm)
-        self.display_features(features, entropy)
+        self.display_props(props, entropy)
 
-        features_csv = self.glcm_features_csv(glcm, entropy)
-        self.create_glcm_csv(features_csv, entropy, self.patient_number, self.file_name_glmc)
-    
+        self.generate_glcm_csv(props, entropy, self.patient_number, self.file_name_glmc)
+
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
 
-    def create_glcm_csv(self, features, file_name_glmc):
-        df = pd.DataFrame(features)
-        df.to_csv(file_name_glmc, index=False)
+    def generate_glcm_csv(self, props, entropy, patient_number, file_name_glmc):
+        props["Entropia"] = entropy
+        props["Paciente"] = f"ROI_{patient_number}_{self.index_img}"
+        df = pd.DataFrame(props)
+        df.to_csv(file_name_glmc, mode="a", index=False)
         print(f"Arquivo '{file_name_glmc}' salvo com sucesso.")
 
-    
     def prev_glcm(self):
         if self.index_img > 0:
             self.index_img -= 1
             glcm = self.glcm(np.array(self.roi_images[self.index_img]))
-            features = self.glcm_features(glcm)
+            props = self.glcm_props(glcm)
             entropy = shannon_entropy(glcm)
 
-            self.display_features(features, entropy)
+            self.display_props(props, entropy)
             self.update_header_roi_number()
+            self.generate_glcm_csv(
+                props, entropy, self.patient_number, self.file_name_glmc
+            )
         else:
             messagebox.showinfo("Fim das imagens", "Essa é o primeiro ROI.")
 
@@ -379,29 +375,27 @@ class ImageProcessor:
         if self.index_img < num_images_per_patient - 1:
             self.index_img += 1
             glcm = self.glcm(np.array(self.roi_images[self.index_img]))
-            features = self.glcm_features(glcm)
+            props = self.glcm_props(glcm)
             entropy = shannon_entropy(glcm)
 
-            self.display_features(features, entropy)
+            self.display_props(props, entropy)
             self.update_header_roi_number()
         else:
             messagebox.showinfo("Fim das imagens", "Essa é a último ROI.")
 
-    def display_features(self, features, entropy):
-        # Creating subplots
+    def display_props(self, props, entropy):
         fig, axes = plt.subplots(2, 2, figsize=(8, 8))
-        fig.suptitle("GLCM Features", fontsize=8)
+        fig.suptitle("GLCM Props", fontsize=8)
         plt.figtext(0.5, 0.02, f"Shannon Entropy: {entropy}", ha="center", fontsize=12)
 
-        # Plotting each feature
-        feature_names = list(features.keys())
-        for i, feature_name in enumerate(feature_names):
+        props_keys = list(props.keys())
+        for i, key in enumerate(props_keys):
             ax = axes[i // 2, i % 2]
-            ax.bar(range(len(features[feature_name])), features[feature_name])
-            ax.set_title(feature_name)
+            ax.bar(range(len(props[key])), props[key])
+            ax.set_title(key)
             ax.set_xlabel("Distance/Angle Index")
-            ax.set_ylabel(feature_name)
-            ax.set_xticks(range(len(features[feature_name])))
+            ax.set_ylabel(key)
+            ax.set_xticks(range(len(props[key])))
             ax.set_xticklabels(
                 [
                     f'Distance {d}, Angle {"{:.2f}".format(a)}'
@@ -421,9 +415,9 @@ class ImageProcessor:
         hist_img = Image.open(buf)
         hist_tk = ImageTk.PhotoImage(hist_img)
 
-        self.canvas_features.config(width=hist_img.width, height=hist_img.height)
-        self.canvas_features.create_image(0, 0, anchor=tk.NW, image=hist_tk)
-        self.canvas_features.image = hist_tk
+        self.canvas_glcm_props.config(width=hist_img.width, height=hist_img.height)
+        self.canvas_glcm_props.create_image(0, 0, anchor=tk.NW, image=hist_tk)
+        self.canvas_glcm_props.image = hist_tk
 
         buf.close()
 
@@ -439,69 +433,71 @@ class ImageProcessor:
             normed=True,
         )
 
-    def glcm_features(self, glcm):
+    def glcm_props(self, glcm):
         contrast = graycoprops(glcm, "contrast").flatten()
         energy = graycoprops(glcm, "energy").flatten()
         homogeneity = graycoprops(glcm, "homogeneity").flatten()
         correlation = graycoprops(glcm, "correlation").flatten()
-        glcm_features = {
-            "Contrast": contrast,
-            "Energy": energy,
-            "Homogeneity": homogeneity,
-            "Correlation": correlation,
+        glcm_props = {
+            "Contraste": contrast,
+            "Energia": energy,
+            "Homogeneidade": homogeneity,
+            "Correlação": correlation,
         }
-        return glcm_features
-    
-    def glcm_features_csv(self, glcm, entropy):
-        contrast = graycoprops(glcm, "contrast").flatten()
-        energy = graycoprops(glcm, "energy").flatten()
-        homogeneity = graycoprops(glcm, "homogeneity").flatten()
-        correlation = graycoprops(glcm, "correlation").flatten()
-        
-
-        glcm_features = {
-            "Número do Paciente": f"PATIENT_{self.patient_number}",
-            "Número da ROI:": self.index_img,
-            "Contrast": contrast,
-            "Energy": energy,
-            "Homogeneity": homogeneity,
-            "Correlation": correlation,
-            "Entropia": entropy
-        }
-        return glcm_features
+        return glcm_props
 
     def caracterize_roi(self):
-        patient_dir = os.path.abspath(f"images/PATIENT_{self.patient_number}/")
+        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}/")
         for widget in self.root.winfo_children():
             widget.destroy()
 
         self.create_classifier_csv()
 
-        frame = tk.Frame(self.root)
-        frame.pack(pady=20)
-
         roi_files = [f for f in os.listdir(patient_dir) if f.startswith("ROI_")]
+
+        col_names = (
+            "Nome do Arquivo",
+            "Classe",
+            "Hu 1",
+            "Hu 2",
+            "Hu 3",
+            "Hu 4",
+            "Hu 5",
+            "Hu 6",
+            "Hu 7",
+        )
+
+        for i, col_name in enumerate(col_names, start=1):
+            tk.Label(self.root, text=col_name).grid(row=3, column=i, padx=70)
+        i = 4
 
         for roi_file in roi_files:
             roi_path = os.path.join(patient_dir, roi_file)
             roi_img = Image.open(roi_path).convert("RGB")
             hu_moments = self.hu_moment_invariants(np.array(roi_img))
-            
-            if self.patient_number <= 16 :
+
+            if self.patient_number <= 16:
                 input_line = f"PATIENT_{self.patient_number},Paciente Saudável"
             else:
                 input_line = f"PATIENT_{self.patient_number},Paciente com Esteatose"
 
-            
-            print("Momentos Invariantes de Hu:")
-            for i, moment in enumerate(hu_moments, 1):
-                input_line = input_line + f",{moment}"
-                # print(f"Hu[{i}]: {moment}")
+            tk.Label(self.root, text=f"ROI_{self.patient_number}_{i - 4}").grid(
+                row=i, column=1
+            )
 
-            self.classifier_add_line_csv(input_line)
+            if self.patient_number <= 16:
+                tk.Label(self.root, text="Paciente Saudável").grid(row=i, column=2)
+            else:
+                tk.Label(self.root, text="Paciente com Esteatose").grid(row=i, column=2)
 
-        btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
-        btn_menu.pack(side=tk.LEFT, padx=5)
+            for moment_index, moment_value in enumerate(hu_moments.flatten(), start=3):
+                input_line = input_line + f",{moment_value}"
+
+                tk.Label(self.root, text=moment_value).grid(row=i, column=moment_index)
+
+            i += 1
+
+        self.classifier_add_line_csv(input_line)
 
     def classificate_img(self):
         for widget in self.root.winfo_children():
@@ -509,7 +505,6 @@ class ImageProcessor:
 
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
-        label.pack(side=tk.LEFT, padx=5)
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
 
@@ -562,11 +557,11 @@ class ImageProcessor:
     def display_roi(self, image):
         self.img = Image.fromarray(image)
         plt.figure(figsize=(8, 8))
-        plt.imshow(self.img, cmap='gray')
-        plt.title('ROI')
+        plt.imshow(self.img, cmap="gray")
+        plt.title("ROI")
         plt.grid(False)
         plt.show()
-    
+
     def prev_image(self):
         if self.index_img > 0:
             self.index_img -= 1
@@ -607,8 +602,7 @@ class ImageProcessor:
 
     def zoom_roi(self):
         self.display_roi(np.array(self.roi_images[self.index_img]))
-  
-    
+
     def select_roi(self, event):
         global liver_roi, kidney_roi
         self.roi_count += 1
@@ -642,7 +636,6 @@ class ImageProcessor:
                 kidney_roi.x,
                 kidney_roi.y,
                 HI_index,
-                self.patient_class,
             )
             if self.index_img + 1 < len(self.images[0][self.patient_number]):
                 self.canvas_img.delete("all")
@@ -710,26 +703,14 @@ class ImageProcessor:
         kidney_roi_x,
         kidney_roi_y,
         indice_HI,
-        classe_paciente,
     ):
         if patient_number <= 16:
             classe_paciente = "Paciente Saudável"
         else:
             classe_paciente = "Paciente com Esteatose"
 
-        nova_linha = {
-            "Nome do Arquivo": f"PATIENT_{patient_number}",
-            "Roi Fígado X": liver_roi_x,
-            "Roi Fígado Y": liver_roi_y,
-            "Roi Rim X": kidney_roi_x,
-            "Roi Rim Y": kidney_roi_y,
-            "Índice hepatorenal (HI)": indice_HI,
-            "Classe": classe_paciente,
-        }
-        self.list.append(nova_linha)
-
         with open(
-            self.csv_file_name, mode="a", newline="", encoding="utf-8"
+            self.file_name_roi_data, mode="a", newline="", encoding="utf-8"
         ) as arquivo_csv:
             writer = csv.writer(arquivo_csv)
             writer.writerow(
@@ -743,12 +724,8 @@ class ImageProcessor:
                     classe_paciente,
                 ]
             )
-    def classifier_add_line_csv(
-        self,
-        input_line
-        
-    ):
 
+    def classifier_add_line_csv(self, input_line):
         line_in_list = input_line.split(",")
         with open(
             self.file_name_classifier, mode="a", newline="", encoding="utf-8"
@@ -757,9 +734,9 @@ class ImageProcessor:
             writer.writerow(line_in_list)
 
     def create_csv(self):
-        if not os.path.exists(self.csv_file_name):
+        if not os.path.exists(self.file_name_roi_data):
             with open(
-                self.csv_file_name, mode="w", newline="", encoding="utf-8"
+                self.file_name_roi_data, mode="w", newline="", encoding="utf-8"
             ) as arquivo_csv:
                 writer = csv.writer(arquivo_csv)
                 writer.writerow(
@@ -814,51 +791,6 @@ class ImageProcessor:
         roi_label = f"ROI {self.index_img + 1}"
         self.root.title(f"Visualizador de Imagens - {roi_label}")
 
-    def create_histogram(
-        self,
-        roi_image,
-        patient_dir,
-        roi_count,
-        patient_number,
-        index_image,
-        greyscale_mean,
-    ):
-        roi_gray = roi_image.convert("L")
-
-        histogram = roi_gray.histogram()
-
-        plt.figure()
-        plt.bar(range(256), histogram, width=1, color="black")
-        plt.title(
-            f"Histograma referente ao ROI{roi_count}_{patient_number}_{index_image}"
-        )
-        plt.xlabel("Brightness")
-        plt.ylabel("Count")
-
-        x_max = plt.gca().get_xlim()[1]
-        y_max = plt.gca().get_ylim()[1]
-
-        plt.text(
-            x=x_max * 0.75,
-            y=y_max * 0.9,
-            s=f"Média: {greyscale_mean:.2f}",
-            fontsize=12,
-            color="black",
-        )
-
-        if self.is_liver_roi():
-            histogram_path = os.path.join(
-                patient_dir, f"Histograma_{patient_number}_{index_image}.png"
-            )
-            plt.savefig(histogram_path)
-            plt.close()
-        else:
-            histogram_path = os.path.join(
-                patient_dir, f"RIM-Histograma_{patient_number}_{index_image}.png"
-            )
-            plt.savefig(histogram_path)
-            plt.close()
-
     def make_HI_index(self, liver_grayscale_mean, kidney_grayscale_mean):
         HI_index = liver_grayscale_mean / kidney_grayscale_mean
         messagebox.showinfo("Índice HI", f"O índice HI é: {HI_index:.2f}")
@@ -866,7 +798,6 @@ class ImageProcessor:
 
     def hu_moment_invariants(self, roi_img):
         image = cv2.cvtColor(np.array(roi_img), cv2.COLOR_RGB2GRAY)
-
         feature = cv2.HuMoments(cv2.moments(image)).flatten()
 
         return feature
