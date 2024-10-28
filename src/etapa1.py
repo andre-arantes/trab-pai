@@ -1,3 +1,9 @@
+# Componentes do grupo:
+# - André Arantes Lopes
+# - Lucas Ribeiro Angelo
+# - Pedro Judice Quintanilha de Albuquerque
+
+
 import csv
 import matplotlib
 import matplotlib.pyplot as plt
