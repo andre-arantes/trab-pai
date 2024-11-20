@@ -1,7 +1,10 @@
 from pathlib import Path
 
+import numpy as np
 import scipy
-from sklearn import svm
+from sklearn.svm import SVC
+from sklearn.calibration import cross_val_predict
+from sklearn.metrics import confusion_matrix, accuracy_score
 from sklearn.model_selection import LeaveOneGroupOut
 
 
@@ -29,5 +32,26 @@ for i in range(len(images[0])):
 
 logo = LeaveOneGroupOut()
 
-for train, test in logo.split(X, y, groups=groups):
-    clf = svm.SVC(kernel='linear', C=1).fit(train, test)
+X = np.array(X)
+X = X.reshape(X.shape[0], -1)
+
+model = SVC(kernel='linear', random_state=42)
+
+# Predict using cross_val_predict
+y_pred = cross_val_predict(model, X, y, cv=logo, groups=groups)
+
+# Calculate confusion matrix
+cm = confusion_matrix(y, y_pred, labels=[0, 1])
+tn, fp, fn, tp = cm.ravel()
+
+# Calculate metrics
+accuracy = accuracy_score(y, y_pred)
+sensitivity = tp / (tp + fn)  # Recall for positive class
+specificity = tn / (tn + fp)  # Recall for negative class
+
+# Output metrics
+print(f"Accuracy: {accuracy:.2f}")
+print(f"Sensitivity (Recall for Positive Class): {sensitivity:.2f}")
+print(f"Specificity (Recall for Negative Class): {specificity:.2f}")
+print("\nConfusion Matrix:")
+print(cm)
