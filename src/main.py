@@ -9,7 +9,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import scipy.io
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import IntVar, messagebox
 from pathlib import Path
 from PIL import Image, ImageTk
 import os
@@ -51,6 +51,7 @@ class ImageProcessor:
         self.file_name_glmc = "dados_glmc.csv"
         self.zoom_level = 1.0
         self.adjusted_roi_liver_img = None
+        self.image_extension = IntVar()
         self.initial_menu()
 
     def initial_menu(self):
@@ -62,38 +63,113 @@ class ImageProcessor:
 
         self.entry_n = tk.Entry(frame)
         self.entry_n.pack(side=tk.LEFT, padx=5)
+        
+        tk.Radiobutton(root, text="MAT", variable=self.image_extension, value=0).pack(anchor="w")
+        tk.Radiobutton(root, text="PNG", variable=self.image_extension, value=1).pack(anchor="w")
+        tk.Radiobutton(root, text="JPEG", variable=self.image_extension, value=2).pack(anchor="w")
+
 
         btn_load = tk.Button(frame, text="Visualizar paciente", command=self.setup_menu)
         btn_load.pack(side=tk.LEFT, padx=5)
+        
+    def load_png_images_from_directory(self, directory_path):
+        images = []
+        for file in sorted(os.listdir(directory_path)):
+            if file.endswith(".png"):
+                image_path = directory_path / file
+                image = Image.open(image_path)
+                image_array = np.array(image)
+                images.append(image_array)
+        return images
+
+    def load_jpeg_images_from_directory(self, directory_path):
+        images = []
+        for file in sorted(os.listdir(directory_path)):
+            if file.lower().endswith((".jpg", ".jpeg")):  
+                image_path = directory_path / file
+                image = Image.open(image_path)
+                image_array = np.array(image)
+                images.append(image_array)
+        return images
 
     def setup_menu(self):
-        try:
-            self.patient_number = int(self.entry_n.get())
-            path_input_dir = Path("../data")
-            path_data = (
-                path_input_dir / "dataset_liver_bmodes_steatosis_assessment_IJCARS.mat"
-            )
-
-            if not path_data.exists():
-                raise FileNotFoundError(f"Arquivo não encontrado: {path_data}")
-
-            data = scipy.io.loadmat(str(path_data))
-            data_array = data["data"]
-            self.images = data_array["images"]
-
-            num_patients = len(self.images[0])
-            if self.patient_number >= num_patients:
-                raise IndexError(
-                    f"Paciente de número {self.patient_number} está fora do limite. Número total de pacientes: {num_patients - 1}"
+        if int(self.image_extension.get()) == 0:
+            try:
+                self.patient_number = int(self.entry_n.get())
+                path_input_dir = Path("../data/MAT")
+                path_data = (
+                    path_input_dir / "dataset_liver_bmodes_steatosis_assessment_IJCARS.mat"
                 )
-            self.index_img = 0
 
-            self.main_menu()
+                if not path_data.exists():
+                    raise FileNotFoundError(f"Arquivo não encontrado: {path_data}")
 
-        except IndexError as e:
-            messagebox.showerror("Paciente não encontrado!", str(e))
-        except ValueError:
-            messagebox.showerror("Erro!", "O campo deve conter um número.")
+                data = scipy.io.loadmat(str(path_data))
+                data_array = data["data"]
+                self.images = data_array["images"]
+
+                num_patients = len(self.images[0])
+                if self.patient_number >= num_patients:
+                    raise IndexError(
+                        f"Paciente de número {self.patient_number} está fora do limite. Número total de pacientes: {num_patients - 1}"
+                    )
+                self.index_img = 0
+
+                self.main_menu()
+
+            except IndexError as e:
+                messagebox.showerror("Paciente não encontrado!", str(e))
+            except ValueError:
+                messagebox.showerror("Erro!", "O campo deve conter um número.")
+
+        elif int(self.image_extension.get()) == 1:
+            try:
+                self.patient_number = int(self.entry_n.get())
+
+                path_input_dir = Path("../data/PNG")
+                path_patient_dir = path_input_dir / f"PATIENT_{self.patient_number}"
+
+                if not path_patient_dir.exists() or not path_patient_dir.is_dir():
+                    raise FileNotFoundError(f"Diretório do paciente não encontrado: {path_patient_dir}")
+
+                self.images = self.load_png_images_from_directory(path_patient_dir)
+
+                num_images = len(self.images)
+                if num_images == 0:
+                    raise ValueError(f"Não há imagens PNG no diretório: {path_patient_dir}")
+
+                self.index_img = 0
+
+                self.main_menu()
+
+            except IndexError as e:
+                messagebox.showerror("Paciente não encontrado!", str(e))
+            except ValueError:
+                messagebox.showerror("Erro!", "O campo deve conter um número.")
+        elif int(self.image_extension.get())  == 2:
+            try:
+                self.patient_number = int(self.entry_n.get())
+
+                path_input_dir = Path("../data/JPEG")
+                path_patient_dir = path_input_dir / f"PATIENT_{self.patient_number}"
+
+                if not path_patient_dir.exists() or not path_patient_dir.is_dir():
+                    raise FileNotFoundError(f"Diretório do paciente não encontrado: {path_patient_dir}")
+
+                self.images = self.load_jpeg_images_from_directory(path_patient_dir)
+
+                num_images = len(self.images)
+                if num_images == 0:
+                    raise ValueError(f"Não há imagens JPEG no diretório: {path_patient_dir}")
+
+                self.index_img = 0
+
+                self.main_menu()
+
+            except IndexError as e:
+                messagebox.showerror("Paciente não encontrado!", str(e))
+            except ValueError:
+                messagebox.showerror("Erro!", "O campo deve conter um número.")
 
     def main_menu(self):
         for widget in self.root.winfo_children():
@@ -156,6 +232,7 @@ class ImageProcessor:
         self.rect = None
         self.file_name_roi_data = "dados_roi.csv"
         self.zoom_level = 1.0
+        self.image_extension = IntVar()
         self.initial_menu()
 
     def visualization_menu(self):
@@ -184,30 +261,37 @@ class ImageProcessor:
 
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
+        
+        if int(self.image_extension.get()) == 0:
+            
+            self.display_image(self.images[0][self.patient_number][self.index_img])
+            self.display_histogram(self.images[0][self.patient_number][self.index_img])
+            
+            if platform.system() == "Linux":
+                self.canvas_img.bind(
+                    "<Button-4>",
+                    functools.partial(
+                        self.zoom, image=self.images[0][self.patient_number][self.index_img]
+                    ),
+                )
+                self.canvas_img.bind(
+                    "<Button-5>",
+                    functools.partial(
+                        self.zoom, image=self.images[0][self.patient_number][self.index_img]
+                    ),
+                )
+            else:
+                self.canvas_img.bind(
+                    "<MouseWheel>",
+                    functools.partial(
+                        self.zoom, image=self.images[0][self.patient_number][self.index_img]
+                    ),
+                )
+               
+        else:    
+            self.display_image(self.images[self.index_img])
+            self.display_histogram(self.images[self.index_img])
 
-        self.display_image(self.images[0][self.patient_number][self.index_img])
-        self.display_histogram(self.images[0][self.patient_number][self.index_img])
-
-        if platform.system() == "Linux":
-            self.canvas_img.bind(
-                "<Button-4>",
-                functools.partial(
-                    self.zoom, image=self.images[0][self.patient_number][self.index_img]
-                ),
-            )
-            self.canvas_img.bind(
-                "<Button-5>",
-                functools.partial(
-                    self.zoom, image=self.images[0][self.patient_number][self.index_img]
-                ),
-            )
-        else:
-            self.canvas_img.bind(
-                "<MouseWheel>",
-                functools.partial(
-                    self.zoom, image=self.images[0][self.patient_number][self.index_img]
-                ),
-            )
 
     def zoom(self, event, image):
         if event.delta > 0:
@@ -234,8 +318,11 @@ class ImageProcessor:
         frame.pack(pady=20)
 
         self.update_header_roi_number()
-
-        self.display_image(self.images[0][self.patient_number][self.index_img])
+        
+        if int(self.image_extension.get()) == 0:
+            self.display_image(self.images[0][self.patient_number][self.index_img])
+        else:    
+            self.display_image(self.images[self.index_img])
 
         self.canvas_img.bind("<ButtonPress-1>", lambda event: self.select_roi(event))
         self.canvas_img.bind("<ButtonPress-1>", lambda event: self.select_roi(event))
@@ -284,27 +371,6 @@ class ImageProcessor:
 
         self.display_image(np.array(self.roi_images[self.index_img]))
         self.display_histogram(np.array(self.roi_images[self.index_img]))
-
-        if platform.system() == "Linux":
-            self.canvas_img.bind(
-                "<Button-4>",
-                functools.partial(
-                    self.zoom, image=np.array(self.roi_images[self.index_img])
-                ),
-            )
-            self.canvas_img.bind(
-                "<Button-5>",
-                functools.partial(
-                    self.zoom, image=np.array(self.roi_images[self.index_img])
-                ),
-            )
-        else:
-            self.canvas_img.bind(
-                "<MouseWheel>",
-                functools.partial(
-                    self.zoom, image=np.array(self.roi_images[self.index_img])
-                ),
-            )
 
     def compute_glcm(self):
         for widget in self.root.winfo_children():
@@ -378,16 +444,20 @@ class ImageProcessor:
 
     def next_glcm(self):
         num_images_per_patient = len(self.images[0][self.patient_number])
-        if self.index_img < num_images_per_patient - 1:
-            self.index_img += 1
-            glcm = self.glcm(np.array(self.roi_images[self.index_img]))
-            props = self.glcm_props(glcm)
-            entropy = shannon_entropy(glcm)
+        try:
+            if self.index_img < num_images_per_patient - 1:
+                self.index_img += 1
+                glcm = self.glcm(np.array(self.roi_images[self.index_img]))
+                props = self.glcm_props(glcm)
+                entropy = shannon_entropy(glcm)
 
-            self.display_props(props, entropy)
-            self.update_header_roi_number()
-        else:
-            messagebox.showinfo("Fim das imagens", "Essa é a último ROI.")
+                self.display_props(props, entropy)
+                self.update_header_roi_number()
+            else:
+                messagebox.showinfo("Fim das imagens", "Essa é a último ROI.")
+        except IndexError as e:
+            self.index_img -= 1
+            messagebox.showerror("Ultimo ROI", str(e))
 
     def display_props(self, props, entropy):
         fig, axes = plt.subplots(2, 2, figsize=(8, 8))
@@ -518,13 +588,22 @@ class ImageProcessor:
 
     def display_image(self, image):
         self.img = Image.fromarray(image)
-        self.img = self.img.resize(
-            (
-                int(self.img.width * self.zoom_level),
-                int(self.img.height * self.zoom_level),
-            ),
-            Image.Resampling.LANCZOS,
-        )
+        if int(self.image_extension.get()) == 0:
+            self.img = self.img.resize(
+                (
+                    int(self.img.width * self.zoom_level),
+                    int(self.img.height * self.zoom_level),
+                ),
+                Image.Resampling.LANCZOS,
+            )
+        else:
+            self.img = self.img.resize(
+                (
+                    int(450),
+                    int(400),
+                ),
+                Image.Resampling.LANCZOS,
+            )
         img_tk = ImageTk.PhotoImage(self.img)
 
         self.canvas_img.config(width=self.img.width, height=self.img.height)
@@ -573,40 +652,64 @@ class ImageProcessor:
     def prev_image(self):
         if self.index_img > 0:
             self.index_img -= 1
-            self.display_image(self.images[0][self.patient_number][self.index_img])
-            self.display_histogram(self.images[0][self.patient_number][self.index_img])
+            if int(self.image_extension.get()) == 0:
+                self.display_image(self.images[0][self.patient_number][self.index_img])
+                self.display_histogram(self.images[0][self.patient_number][self.index_img])
+            else:    
+                self.display_image(self.images[self.index_img])
+                self.display_histogram(self.images[self.index_img])
+                    
             self.update_header_roi_number()
         else:
             messagebox.showinfo("Fim das imagens", "Essa é a primeira imagem.")
 
     def next_image(self):
         num_images_per_patient = len(self.images[0][self.patient_number])
-        if self.index_img < num_images_per_patient - 1:
-            self.index_img += 1
-            self.display_image(self.images[0][self.patient_number][self.index_img])
-            self.display_histogram(self.images[0][self.patient_number][self.index_img])
-            self.update_header_roi_number()
-        else:
-            messagebox.showinfo("Fim das imagens", "Essa é a última imagem.")
+        try:
+            if self.index_img < num_images_per_patient - 1:
+                self.index_img += 1
+                
+                if int(self.image_extension.get()) == 0:
+                    self.display_image(self.images[0][self.patient_number][self.index_img])
+                    self.display_histogram(self.images[0][self.patient_number][self.index_img])
+                else:    
+                    self.display_image(self.images[self.index_img])
+                    self.display_histogram(self.images[self.index_img])
+                self.update_header_roi_number()
+            else:
+                messagebox.showinfo("Fim das imagens", "Essa é a última imagem.")
+                
+        except IndexError as e:
+            self.index_img -= 1
+            messagebox.showerror("Último Paciente", str(e))
 
     def prev_roi(self):
-        if self.index_img > 0:
-            self.index_img -= 1
-            self.display_image(np.array(self.roi_images[self.index_img]))
-            self.display_histogram(np.array(self.roi_images[self.index_img]))
-            self.update_header_roi_number()
-        else:
-            messagebox.showinfo("Fim das imagens", "Essa é o primeiro ROI.")
+        try:
+            if self.index_img > 0:
+                self.index_img -= 1
+                self.display_image(np.array(self.roi_images[self.index_img]))
+                self.display_histogram(np.array(self.roi_images[self.index_img]))
+                self.update_header_roi_number()
+            else:
+                messagebox.showinfo("Fim das imagens", "Essa é o primeiro ROI.")
+        except IndexError as e:
+            messagebox.showerror("Primeiro Paciente", str(e))
 
     def next_roi(self):
         num_images_per_patient = len(self.images[0][self.patient_number])
-        if self.index_img < num_images_per_patient - 1:
-            self.index_img += 1
-            self.display_image(np.array(self.roi_images[self.index_img]))
-            self.display_histogram(np.array(self.roi_images[self.index_img]))
-            self.update_header_roi_number()
-        else:
-            messagebox.showinfo("Fim das imagens", "Essa é o último ROI.")
+        try:
+            if self.index_img < num_images_per_patient - 1:
+                self.index_img += 1
+                self.display_image(np.array(self.roi_images[self.index_img]))
+                self.display_histogram(np.array(self.roi_images[self.index_img]))
+                self.update_header_roi_number()
+            else:
+                messagebox.showinfo("Fim das imagens", "Essa é o último ROI.")
+                
+        except IndexError as e:
+            self.index_img -= 1
+            messagebox.showerror("Último ROI", str(e))
+
 
     def zoom_roi(self):
         self.display_roi(np.array(self.roi_images[self.index_img]))
@@ -645,15 +748,28 @@ class ImageProcessor:
                 kidney_roi.y,
                 HI_index,
             )
-            if self.index_img + 1 < len(self.images[0][self.patient_number]):
-                self.canvas_img.delete("all")
-                self.index_img += 1
-                self.display_image(self.images[0][self.patient_number][self.index_img])
-                self.roi_count = 0
-            else:
-                messagebox.showinfo(
-                    "Info", "Não há mais imagens disponíveis para este paciente."
-                )
+            try:
+                if self.index_img + 1 < len(self.images[0][self.patient_number]):
+                    self.canvas_img.delete("all")
+                    self.index_img += 1
+                    if int(self.image_extension.get()) == 0:
+                        self.display_image(self.images[0][self.patient_number][self.index_img])
+                    else:
+                        self.display_image(self.images[self.index_img])
+                    
+                    self.roi_count = 0
+                else:
+                    messagebox.showinfo(
+                        "Info", "Não há mais imagens disponíveis para este paciente."
+                    )
+                    frame = tk.Frame(self.root)
+                    frame.pack(pady=20)
+                    btn_menu = tk.Button(
+                        frame, text="Voltar ao menu", command=self.main_menu
+                    )
+                    btn_menu.pack(side=tk.LEFT, padx=5)
+            except IndexError as e:
+                messagebox.showerror("Último ROI", str(e))
                 frame = tk.Frame(self.root)
                 frame.pack(pady=20)
                 btn_menu = tk.Button(
@@ -813,7 +929,7 @@ class ImageProcessor:
 
 root = tk.Tk()
 root.title("Visualizador de Imagens")
-root.attributes("-fullscreen", True)
+#root.attributes("-fullscreen", True)
 
 app = ImageProcessor(root)
 
