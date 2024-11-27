@@ -8,7 +8,7 @@ import numpy as np
 from keras.src.applications.mobilenet_v2 import preprocess_input
 from keras.src.applications.mobilenet_v2 import MobileNetV2
 from sklearn.metrics import confusion_matrix
-from sklearn.model_selection import LeaveOneGroupOut
+from sklearn.model_selection import LeaveOneGroupOut, train_test_split
 from keras.src.losses import sparse_categorical_crossentropy
 from keras.src.optimizers import Adam
 import tensorflow as tf
@@ -26,26 +26,35 @@ HEALTHY = "Paciente Saudável"
 
 
 
-path_input_dir = Path("images")
-X = []
-y = []
-groups = []
-csvIndex = 1
-with open("src/dados_classificador.csv", newline="") as csvfile:
-    reader=csv.reader(csvfile)
-    rows=[r for r in reader]
-    for index, path in enumerate(sorted(path_input_dir.iterdir(), key=lambda m: int(m.name.split('_')[-1]))):
-        for imagePath in path.iterdir():
-            state = 0 if rows[csvIndex][1] == HEALTHY else 1
-            image = Image.open(imagePath).resize((224, 224)).convert('RGB')
-            image = np.array(image)
-            X.append(image)
-            y.append(state)
-            groups.append(index)
-            csvIndex += 1
+def main():
+    path_input_dir = Path("images")
+    X = []
+    y = []
+    groups = []
+    csvIndex = 1
+    with open("src/dados_classificador.csv", newline="") as csvfile:
+        reader=csv.reader(csvfile)
+        rows=[r for r in reader]
+        for index, path in enumerate(sorted(path_input_dir.iterdir(), key=lambda m: int(m.name.split('_')[-1]))):
+            for imagePath in path.iterdir():
+                state = 0 if rows[csvIndex][1] == HEALTHY else 1
+                image = Image.open(imagePath).resize((224, 224)).convert('RGB')
+                image = np.array(image)
+                X.append(image)
+                y.append(state)
+                groups.append(index)
+                csvIndex += 1
 
-X = np.array(X)
-datagen = ImageDataGenerator(
+    X = np.array(X)
+    y = np.array(y)
+
+    train_model(X, y)
+
+    
+
+def train_model(X, y):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1)
+    datagen = ImageDataGenerator(
     rotation_range=20,
     width_shift_range=0.2,
     height_shift_range=0.2,
@@ -53,30 +62,11 @@ datagen = ImageDataGenerator(
     zoom_range=0.2,
     horizontal_flip=True,
     fill_mode='nearest'
-)
-
-logo = LeaveOneGroupOut()
-
-acc_per_fold = []
-loss_per_fold = []
-conf_matrices = []
-for i, (train_index, test_index) in enumerate(logo.split(X, y, groups)):
-    path = "mobileNetHistory/logs/model_history_log_fold_" + str(i) + ".csv"
-    csv_logger = CSVLogger(path, append=True)
-    X_train = []
-    y_train = []
-    X_test = []
-    y_test = []
-    for index in train_index:
-        X_train.append(X[index])
-        y_train.append(y[index])
-    for index in test_index:
-        X_test.append(X[index])
-        y_test.append(y[index])
-    X_train = np.array(X_train)
-    y_train = np.array(y_train)
-    X_test = np.array(X_test)
-    y_test = np.array(y_test)
+    )
+    X_train = preprocess_input(X_train)
+    X_test = preprocess_input(X_test)
+    datagen.fit(X_train)
+    csv_logger = CSVLogger("mobileNetHistory/mainModel/log.csv", append=True)
     base_model = MobileNetV2(weights='imagenet',include_top=False)
     for layer in base_model.layers[:120]:
         layer.trainable = False 
@@ -90,34 +80,12 @@ for i, (train_index, test_index) in enumerate(logo.split(X, y, groups)):
     output = Dense(2, activation='softmax')(model)
     model = Model(inputs=base_model.input, outputs=output)
     model.compile(loss=sparse_categorical_crossentropy, optimizer=Adam(learning_rate=0.0001), metrics=['accuracy'])
-
-    # Generate a print
-    print('------------------------------------------------------------------------')
-    print(f'Training for fold {i} ...')
-
-    
-    # Fit data to model
-    X_train = preprocess_input(X_train)
-    X_test = preprocess_input(X_test)
-    
-
-    datagen.fit(X_train)
     lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5)
     history = model.fit(datagen.flow(X_train, y_train, batch_size=32),
                 batch_size=32,
                 epochs=20,
                 verbose=1, callbacks=[csv_logger, lr_scheduler], validation_data=(X_test, y_test), )
-
-    # Generate generalization metrics
-    scores = model.evaluate(X_test, y_test, verbose=0)
-    acc_per_fold.append(scores[1] * 100)
-    loss_per_fold.append(scores[0])
-
-    # Get predictions and convert to class labels
-    y_pred = model.predict(X_test)
-    y_pred_classes = np.argmax(y_pred, axis=1)
-    cm = confusion_matrix(y_test, y_pred_classes)
-    conf_matrices.append(cm)
+    model.save_weights("mobileNetHistory/mainModel/model.weights.h5", overwrite=True)
 
     plt.clf()
     plt.plot(history.history['loss'])
@@ -126,7 +94,7 @@ for i, (train_index, test_index) in enumerate(logo.split(X, y, groups)):
     plt.ylabel('loss')
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig("mobileNetHistory/graphs/loss_fold_" + str(i) + ".png")
+    plt.savefig("mobileNetHistory/mainModel/loss.png")
     plt.clf()
     plt.plot(history.history['accuracy'])
     plt.plot(history.history['val_accuracy'])
@@ -134,20 +102,115 @@ for i, (train_index, test_index) in enumerate(logo.split(X, y, groups)):
     plt.ylabel('accuracy')
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig("mobileNetHistory/graphs/acc_fold_" + str(i) + ".png")
+    plt.savefig("mobileNetHistory/mainModel/acc.png")
+
+def Cross_validation(X, y, groups):
+    datagen = ImageDataGenerator(
+    rotation_range=20,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    fill_mode='nearest'
+)
+
+    logo = LeaveOneGroupOut()
+
+    acc_per_fold = []
+    loss_per_fold = []
+    conf_matrices = []
+    for i, (train_index, test_index) in enumerate(logo.split(X, y, groups)):
+        path = "mobileNetHistory/logs/model_history_log_fold_" + str(i) + ".csv"
+        csv_logger = CSVLogger(path, append=True)
+        X_train = []
+        y_train = []
+        X_test = []
+        y_test = []
+        for index in train_index:
+            X_train.append(X[index])
+            y_train.append(y[index])
+        for index in test_index:
+            X_test.append(X[index])
+            y_test.append(y[index])
+        X_train = np.array(X_train)
+        y_train = np.array(y_train)
+        X_test = np.array(X_test)
+        y_test = np.array(y_test)
+        base_model = MobileNetV2(weights='imagenet',include_top=False)
+        for layer in base_model.layers[:120]:
+            layer.trainable = False 
+        model = base_model.output 
+        model = tf.keras.layers.GlobalAveragePooling2D()(model)
+        model = BatchNormalization()(model)
+        model = Dense(128, activation='relu', kernel_regularizer=L2(0.001))(model)
+        model = Dropout(0.5)(model)
+        model = Dense(64, activation='relu', kernel_regularizer=L2(0.001))(model)
+        model = Dropout(0.5)(model)
+        output = Dense(2, activation='softmax')(model)
+        model = Model(inputs=base_model.input, outputs=output)
+        model.compile(loss=sparse_categorical_crossentropy, optimizer=Adam(learning_rate=0.0001), metrics=['accuracy'])
+
+    # Generate a print
+        print('------------------------------------------------------------------------')
+        print(f'Training for fold {i} ...')
+
+    
+    # Fit data to model
+        X_train = preprocess_input(X_train)
+        X_test = preprocess_input(X_test)
+    
+
+        datagen.fit(X_train)
+        lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5)
+        history = model.fit(datagen.flow(X_train, y_train, batch_size=32),
+                batch_size=32,
+                epochs=20,
+                verbose=1, callbacks=[csv_logger, lr_scheduler], validation_data=(X_test, y_test), )
+
+    # Generate generalization metrics
+        scores = model.evaluate(X_test, y_test, verbose=0)
+        acc_per_fold.append(scores[1] * 100)
+        loss_per_fold.append(scores[0])
+
+    # Get predictions and convert to class labels
+        y_pred = model.predict(X_test)
+        y_pred_classes = np.argmax(y_pred, axis=1)
+        cm = confusion_matrix(y_test, y_pred_classes)
+        conf_matrices.append(cm)
+
+        plt.clf()
+        plt.plot(history.history['loss'])
+        plt.plot(history.history['val_loss'])
+        plt.title('model loss')
+        plt.ylabel('loss')
+        plt.xlabel('epoch')
+        plt.legend(['train', 'test'], loc='upper left')
+        plt.savefig("mobileNetHistory/graphs/loss_fold_" + str(i) + ".png")
+        plt.clf()
+        plt.plot(history.history['accuracy'])
+        plt.plot(history.history['val_accuracy'])
+        plt.title('model accuracy')
+        plt.ylabel('accuracy')
+        plt.xlabel('epoch')
+        plt.legend(['train', 'test'], loc='upper left')
+        plt.savefig("mobileNetHistory/graphs/acc_fold_" + str(i) + ".png")
 
 
 # == Provide average scores ==
-print('------------------------------------------------------------------------')
-print('Score per fold')
-for i in range(0, len(acc_per_fold)):
-  print('------------------------------------------------------------------------')
-  print(f'> Fold {i+1} - Loss: {loss_per_fold[i]} - Accuracy: {acc_per_fold[i]}%')
-print('------------------------------------------------------------------------')
-print('Average scores for all folds:')
-print(f'> Accuracy: {np.mean(acc_per_fold)} (+- {np.std(acc_per_fold)})')
-print(f'> Loss: {np.mean(loss_per_fold)}')
-print('------------------------------------------------------------------------')
-avg_conf_matrix = np.sum(conf_matrices, axis=0)
-print("Average Confusion Matrix:")
-print(avg_conf_matrix)
+    print('------------------------------------------------------------------------')
+    print('Score per fold')
+    for i in range(0, len(acc_per_fold)):
+      print('------------------------------------------------------------------------')
+      print(f'> Fold {i+1} - Loss: {loss_per_fold[i]} - Accuracy: {acc_per_fold[i]}%')
+    print('------------------------------------------------------------------------')
+    print('Average scores for all folds:')
+    print(f'> Accuracy: {np.mean(acc_per_fold)} (+- {np.std(acc_per_fold)})')
+    print(f'> Loss: {np.mean(loss_per_fold)}')
+    print('------------------------------------------------------------------------')
+    avg_conf_matrix = np.sum(conf_matrices, axis=0)
+    print("Average Confusion Matrix:")
+    print(avg_conf_matrix)
+
+if __name__ == "__main__":
+    main()
