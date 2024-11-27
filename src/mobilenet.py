@@ -12,7 +12,8 @@ from sklearn.model_selection import LeaveOneGroupOut
 from keras.src.losses import sparse_categorical_crossentropy
 from keras.src.optimizers import Adam
 import tensorflow as tf
-from keras.src.callbacks import CSVLogger
+from keras.src.callbacks import CSVLogger, ReduceLROnPlateau
+from keras.src.legacy.preprocessing.image import ImageDataGenerator
 from keras.src.layers import Dropout
 from keras.src.layers import Dense
 from keras.src.models import Model
@@ -44,6 +45,15 @@ with open("src/dados_classificador.csv", newline="") as csvfile:
             csvIndex += 1
 
 X = np.array(X)
+datagen = ImageDataGenerator(
+    rotation_range=20,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    fill_mode='nearest'
+)
 
 logo = LeaveOneGroupOut()
 
@@ -68,7 +78,7 @@ for i, (train_index, test_index) in enumerate(logo.split(X, y, groups)):
     X_test = np.array(X_test)
     y_test = np.array(y_test)
     base_model = MobileNetV2(weights='imagenet',include_top=False)
-    for layer in base_model.layers[:120]:  # Congele as 100 primeiras camadas
+    for layer in base_model.layers[:120]:
         layer.trainable = False 
     model = base_model.output 
     model = tf.keras.layers.GlobalAveragePooling2D()(model)
@@ -89,10 +99,14 @@ for i, (train_index, test_index) in enumerate(logo.split(X, y, groups)):
     # Fit data to model
     X_train = preprocess_input(X_train)
     X_test = preprocess_input(X_test)
-    history = model.fit(X_train, y_train,
+    
+
+    datagen.fit(X_train)
+    lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5)
+    history = model.fit(datagen.flow(X_train, y_train, batch_size=32),
                 batch_size=32,
                 epochs=20,
-                verbose=1, callbacks=[csv_logger], validation_data=(X_test, y_test), )
+                verbose=1, callbacks=[csv_logger, lr_scheduler], validation_data=(X_test, y_test), )
 
     # Generate generalization metrics
     scores = model.evaluate(X_test, y_test, verbose=0)
