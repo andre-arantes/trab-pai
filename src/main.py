@@ -47,7 +47,7 @@ class ImageProcessor:
         self.patient_number = None
         self.rect = None
         self.file_name_roi_data = "dados_roi.csv"
-        self.file_name_classifier = "dados_classificador.csv"
+        self.file_name_hu_features = "dados_hu.csv"
         self.file_name_glmc = "dados_glmc.csv"
         self.zoom_level = 1.0
         self.adjusted_roi_liver_img = None
@@ -429,13 +429,6 @@ class ImageProcessor:
         props = self.glcm_props(glcm)
         entropy = shannon_entropy(glcm)
         self.display_props(props, entropy)
-        print(
-            props,
-            entropy,
-            self.patient_number,
-            self.file_name_glmc,
-            "props, entropy, self.patient_number, self.file_name_glmc",
-        )
 
         self.generate_glcm_csv(props, entropy, self.patient_number, self.file_name_glmc)
 
@@ -550,7 +543,7 @@ class ImageProcessor:
         for widget in self.root.winfo_children():
             widget.destroy()
 
-        self.create_classifier_csv()
+        self.create_hu_features_csv()
 
         roi_files = [f for f in os.listdir(patient_dir) if f.startswith("ROI_")]
 
@@ -595,7 +588,7 @@ class ImageProcessor:
                 tk.Label(self.root, text=moment_value).grid(row=i, column=moment_index)
 
             i += 1
-            self.classifier_add_line_csv(input_line)
+            self.features_add_line_csv(input_line)
 
     def classificate_img(self):
         self.index_img = 0
@@ -884,10 +877,10 @@ class ImageProcessor:
                 ]
             )
 
-    def classifier_add_line_csv(self, input_line):
+    def features_add_line_csv(self, input_line):
         line_in_list = input_line.split(",")
         with open(
-            self.file_name_classifier, mode="a", newline="", encoding="utf-8"
+            self.file_name_hu_features, mode="a", newline="", encoding="utf-8"
         ) as arquivo_csv:
             writer = csv.writer(arquivo_csv, delimiter=",")
             writer.writerow(line_in_list)
@@ -910,10 +903,10 @@ class ImageProcessor:
                     ]
                 )
 
-    def create_classifier_csv(self):
-        if not os.path.exists(self.file_name_classifier):
+    def create_hu_features_csv(self):
+        if not os.path.exists(self.file_name_hu_features):
             with open(
-                self.file_name_classifier, mode="w", newline="", encoding="utf-8"
+                self.file_name_hu_features, mode="w", newline="", encoding="utf-8"
             ) as arquivo_csv:
                 writer = csv.writer(arquivo_csv)
                 writer.writerow(
