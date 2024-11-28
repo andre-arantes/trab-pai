@@ -21,6 +21,9 @@ from skimage.measure import shannon_entropy
 import platform
 import cv2
 import pandas as pd
+from keras.src.applications.mobilenet_v2 import MobileNetV2
+from imageio import imread
+from keras.applications.mobilenet_v2 import preprocess_input
 
 matplotlib.use("TkAgg")
 
@@ -216,7 +219,9 @@ class ImageProcessor:
         btn_roi_caracterization.pack(side=tk.LEFT, padx=5)
 
         btn_classificate_img = tk.Button(
-            frame, text="Classificar imagem", command=self.classificate_img
+            frame,
+            text="Classificar imagem",
+            command=self.mobilenet_classificator,
         )
         btn_classificate_img.pack(side=tk.LEFT, padx=5)
 
@@ -423,7 +428,6 @@ class ImageProcessor:
 
         btn_next = tk.Button(frame, text="Próximo ROI", command=self.next_glcm)
         btn_next.pack(side=tk.LEFT, padx=5)
-        print("self.roi_images", self.index_img)
 
         glcm = self.glcm(np.array(self.roi_images[self.index_img]))
         props = self.glcm_props(glcm)
@@ -590,17 +594,71 @@ class ImageProcessor:
             i += 1
             self.features_add_line_csv(input_line)
 
-    def classificate_img(self):
-        self.index_img = 0
+    def mobilenet_classificator(self):
+        model = MobileNetV2(
+            weights=None,
+            input_shape=(224, 224, 3),
+            classes=2,
+        )
+
+        model.load_weights(
+            "/home/andrelinux/cc6/pai/trab-pai/mobileNetHistory/mainModel/model.weights.h5",
+            skip_mismatch=True,
+        )
+
         for widget in self.root.winfo_children():
             widget.destroy()
 
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
-        label = tk.Label(frame, text="TODO (parte 2)")
+        label = tk.Label(frame, text="Classificação de Imagens")
         label.pack(side=tk.LEFT, padx=5)
+
+        patient_dir = os.path.abspath(f"../images/PATIENT_{self.patient_number}")
+
+        data = np.empty((1, 224, 224, 3))
+        image = imread(f"{patient_dir}/ROI_{self.patient_number}_{self.index_img}.png")
+        image_resized = Image.fromarray(image).convert("RGB").resize((224, 224))
+        data[0] = np.array(image_resized)
+        data = preprocess_input(data)
+
+        predictions = model.predict(data)
+
+        prob_healthy = predictions[0][0]
+        prob_unhealthy = predictions[0][1]
+
+        if prob_healthy > prob_unhealthy:
+            result_text = f"Paciente saudável: {prob_healthy * 100:.2f}%"
+        else:
+            result_text = f"Paciente não saudável: {prob_unhealthy * 100:.2f}%"
+
+        label = tk.Label(frame, text=result_text)
+        label.pack(side=tk.LEFT, padx=5)
+
         btn_menu = tk.Button(frame, text="Voltar ao menu", command=self.main_menu)
         btn_menu.pack(side=tk.LEFT, padx=5)
+        self.btn_previous = tk.Button(
+            frame,
+            text="Imagem Anterior",
+            command=self.previous_pro_image,
+        )
+        self.btn_previous.pack(side=tk.LEFT, padx=5)
+
+        self.btn_next = tk.Button(
+            frame,
+            text="Próxima Imagem",
+            command=self.next_pro_image,
+        )
+        self.btn_next.pack(side=tk.LEFT, padx=5)
+
+    def next_pro_image(self):
+        self.index_img += 1
+        self.mobilenet_classificator()
+
+    def previous_pro_image(self):
+        if self.index_img > 0:
+            self.index_img -= 1
+        self.mobilenet_classificator()
 
     def display_image(self, image):
         self.img = Image.fromarray(image)
